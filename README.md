@@ -53,6 +53,32 @@ KIFF held my last call. What happens now?
 - **The `kiff-domains` skill**: defines the business rules a Card builds on, in
   a `kiff.yaml` file.
 
+**This plugin connects Claude Code to KIFF's hosted gateway.** It is not
+local-only. Tool calls made through the gateway can perform the actions the
+account connected, including changes to customer accounts or money. KIFF
+checks each call against the agent's Card before forwarding it.
+
+## What enforces the Card
+
+**KIFF's servers enforce it, not this plugin.**
+
+- The gateway at `mcp.kiff.dev` checks every call against the agent's Card
+  and decides whether it is forwarded, held or refused.
+- The agent's gateway key can only ask. It cannot approve a held call, issue or
+  change a Card, mint keys or manage the account. The gateway refuses any key
+  that is not bound to one agent.
+- A held call is answered by the account's people in KIFF Cloud, never by the
+  agent.
+
+**The skills are guidance.** They tell Claude how to connect a tool, draft a
+Card, and handle `held`, `refused` and `unknown` results, and never to route
+around a Card. They do not enforce anything. If Claude ignored them, or a
+prompt injection told it to, the outcome would be the same: instructions cannot
+grant authority the key does not have.
+
+The threats, mitigations and residual risks are in
+[THREAT_MODEL.md](THREAT_MODEL.md).
+
 ## Install
 
 In Claude Code:
@@ -89,9 +115,11 @@ same service directly, that path is outside the Card; the skill says so.
   `https://mcp.kiff.dev/mcp`, with this agent's gateway key. KIFF checks it
   against the agent's Card and forwards allowed calls to the tool the account
   connected.
-- **The `kiff` skill** may also show or run one request to KIFF's decision API,
-  `https://api.kiff.dev/v1/proposals/decide`, with a KIFF API key you supply, for
-  agents that call KIFF from their own code. It uses no other service.
+- **The `kiff` skill** sends nothing itself. For agents that call KIFF from
+  their own code, it explains KIFF's decision API
+  (`https://api.kiff.dev/v1/proposals/decide`); that code reads its own
+  agent-bound key from its configuration. The skill never asks for, reads,
+  stores or sends a KIFF key.
 - **What KIFF keeps.** The decision record (agent, tool, outcome, Card,
   amount) and a hash of the arguments, for the life of the account. A call's
   arguments are deleted once it is sent or refused, and the tool's result
@@ -116,4 +144,5 @@ when they drift or when a skill is not published.
 ## License
 
 MIT. To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). To report a
-vulnerability, see [SECURITY.md](SECURITY.md).
+vulnerability, see [SECURITY.md](SECURITY.md). The threat model is in
+[THREAT_MODEL.md](THREAT_MODEL.md).
