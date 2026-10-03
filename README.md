@@ -90,10 +90,12 @@ same service directly, that path is outside the Card; the skill says so.
 - **The `kiff` skill** may also show or run one request to KIFF's decision API,
   `https://api.kiff.dev/v1/proposals/decide`, with a KIFF API key you supply, for
   agents that call KIFF from their own code. It uses no other service.
-- **What KIFF keeps.** KIFF stores each decision, its parameters and the Card's
-  statement as audit data for the account, for the life of the account, and
-  deletes it when the account is deleted. Parameters are stored as sent, without
-  automatic redaction. Details: [kiff.dev/privacy](https://kiff.dev/privacy).
+- **What KIFF keeps.** The decision record (agent, tool, outcome, Card,
+  amount) and a hash of the arguments, for the life of the account. A call's
+  arguments are deleted once it is sent or refused, and the tool's result
+  after 24 hours. The plugin reads and writes: the tools it reaches can change
+  things, inside the agent's Card. Details:
+  [DATA_MINIMIZATION.md](DATA_MINIMIZATION.md).
 
 ## Other agents
 
