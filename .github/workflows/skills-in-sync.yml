@@ -13,15 +13,21 @@ jobs:
   compare:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Compare each skill with kiff.dev
         run: |
-          set -euo pipefail
+          set -uo pipefail
           status=0
           for name in kiff kiff-domains; do
-            curl -fsSL "https://kiff.dev/skills/${name}.md" -o "/tmp/${name}.md"
+            url="https://kiff.dev/skills/${name}.md"
+            code=$(curl -sSL -o "/tmp/${name}.md" -w '%{http_code}' "$url")
+            if [ "$code" != "200" ]; then
+              echo "::error file=plugins/kiff/skills/${name}/SKILL.md::${url} answered ${code}: the skill is not published on kiff.dev (not deployed yet?)"
+              status=1
+              continue
+            fi
             if ! diff -u "plugins/kiff/skills/${name}/SKILL.md" "/tmp/${name}.md"; then
-              echo "::error file=plugins/kiff/skills/${name}/SKILL.md::differs from https://kiff.dev/skills/${name}.md"
+              echo "::error file=plugins/kiff/skills/${name}/SKILL.md::differs from ${url}"
               status=1
             fi
           done

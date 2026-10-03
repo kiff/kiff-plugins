@@ -65,8 +65,10 @@ Codex, Cursor, Gemini CLI and others can install the same skill as a file:
 
 The skills are published at [kiff.dev/skills/kiff.md](https://kiff.dev/skills/kiff.md)
 and [kiff.dev/skills/kiff-domains.md](https://kiff.dev/skills/kiff-domains.md).
-The copies here must match; the `skills-in-sync` workflow checks them on every
-change and weekly, and fails when they drift.
+The copies here are exactly what kiff.dev serves (byte for byte, after the
+site's typography pass), so to update one, download it from that URL. The
+`skills-in-sync` workflow checks them on every change and weekly, and fails
+when they drift or when a skill is not published.
 
 ## License
 
