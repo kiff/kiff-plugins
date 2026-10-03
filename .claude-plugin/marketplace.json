@@ -1,0 +1,20 @@
+{
+  "name": "kiff",
+  "owner": {
+    "name": "KIFF",
+    "email": "gabriel@kiff.dev"
+  },
+  "metadata": {
+    "description": "KIFF plugins for Claude Code. KIFF gives each AI agent a Card and checks every call against it before it runs."
+  },
+  "plugins": [
+    {
+      "name": "kiff",
+      "source": "./plugins/kiff",
+      "description": "Connect an agent to KIFF through the MCP gateway, propose a Card for the owner, handle held calls without routing around the Card, and author kiff.yaml domains.",
+      "version": "0.1.0",
+      "homepage": "https://kiff.dev/docs/agent-skill",
+      "license": "MIT"
+    }
+  ]
+}

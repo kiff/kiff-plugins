@@ -1,0 +1,13 @@
+{
+  "name": "kiff",
+  "version": "0.1.0",
+  "description": "Connect an agent to KIFF through the MCP gateway, propose a Card for the owner, handle held calls without routing around the Card, and author kiff.yaml domains.",
+  "author": {
+    "name": "KIFF",
+    "url": "https://kiff.dev"
+  },
+  "homepage": "https://kiff.dev/docs/agent-skill",
+  "repository": "https://github.com/kiff/kiff-plugins",
+  "license": "MIT",
+  "keywords": ["kiff", "agents", "mcp", "authorization", "approvals", "limits"]
+}

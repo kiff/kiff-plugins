@@ -1,0 +1,33 @@
+name: skills-in-sync
+
+# The skills in this plugin are copies of the ones kiff.dev serves. A copy
+# that drifts teaches agents an old protocol, so this fails when they differ.
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare each skill with kiff.dev
+        run: |
+          set -euo pipefail
+          status=0
+          for name in kiff kiff-domains; do
+            curl -fsSL "https://kiff.dev/skills/${name}.md" -o "/tmp/${name}.md"
+            if ! diff -u "plugins/kiff/skills/${name}/SKILL.md" "/tmp/${name}.md"; then
+              echo "::error file=plugins/kiff/skills/${name}/SKILL.md::differs from https://kiff.dev/skills/${name}.md"
+              status=1
+            fi
+          done
+          exit $status
+      - name: Manifests are valid JSON
+        run: |
+          for f in .claude-plugin/marketplace.json plugins/kiff/.claude-plugin/plugin.json plugins/kiff/.mcp.json; do
+            python3 -m json.tool "$f" > /dev/null
+          done

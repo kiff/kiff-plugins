@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "kiff": {
+      "type": "http",
+      "url": "https://mcp.kiff.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer ${KIFF_GATEWAY_KEY}"
+      }
+    }
+  }
+}
