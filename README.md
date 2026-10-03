@@ -111,4 +111,5 @@ when they drift or when a skill is not published.
 
 ## License
 
-MIT.
+MIT. To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). To report a
+vulnerability, see [SECURITY.md](SECURITY.md).
