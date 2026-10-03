@@ -1,3 +1,9 @@
+<!--
+title: KIFF Cards for Claude Code
+description: KIFF plugins for Claude Code: the KIFF MCP gateway, and skills to connect an agent, propose a Card and handle held calls.
+keywords: AI agents, Claude Code, MCP, KIFF, tool authorization, delegated authority, approvals, agent safety, plugin, open source
+-->
+
 # KIFF Cards for Claude Code
 
 **Delegated authority for the AI agents your company runs.**
@@ -50,6 +56,16 @@ KIFF held my last call. What happens now?
   around a refusal.
 - **The `kiff-domains` skill**: defines the business rules a Card builds on, in
   a `kiff.yaml` file.
+
+## Open source and AI compatibility
+
+This repository is structured to be easy to inspect, maintain, and contribute to,
+including for AI coding assistants and human reviewers.
+
+- `AGENTS.md` documents the high-level operating context for contributors and
+  coding agents.
+- `SECURITY.md` explains how to report vulnerabilities and protect secrets.
+- `CONTRIBUTING.md` explains the contribution process and expected changes.
 
 ## Install
 
@@ -112,3 +128,4 @@ when they drift or when a skill is not published.
 ## License
 
 MIT.
+
