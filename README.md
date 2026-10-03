@@ -2,6 +2,9 @@
 
 **Delegated authority for the AI agents your company runs.**
 
+It works with a KIFF Cloud account. Create one at [kiff.dev](https://kiff.dev);
+sign-up is open.
+
 Your agents can issue refunds, grant credits, change plans or update customer
 accounts. KIFF lets you decide how far each one may go, and checks every call
 before it runs.
@@ -20,8 +23,7 @@ decision is recorded with a signed receipt, so you can show who allowed what.
 
 Engineering and operations teams at companies that let AI agents act on their
 own money or customer accounts, and the agencies and builders who deliver
-those agents to clients. You need a KIFF Cloud account for your company
-([kiff.dev](https://kiff.dev)).
+those agents to clients.
 
 ## What your team does with it
 
