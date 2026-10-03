@@ -9,5 +9,26 @@
   "homepage": "https://kiff.dev/docs/agent-skill",
   "repository": "https://github.com/kiff/kiff-plugins",
   "license": "MIT",
-  "keywords": ["kiff", "agents", "mcp", "authorization", "approvals", "limits"]
+  "keywords": [
+    "kiff",
+    "agents",
+    "mcp",
+    "authorization",
+    "approvals",
+    "limits"
+  ],
+  "icon": "./.claude-plugin/icon.png",
+  "privacyPolicyUrl": "https://kiff.dev/privacy",
+  "termsOfServiceUrl": "https://kiff.dev/terms",
+  "documentationUrl": "https://kiff.dev/docs/agent-skill",
+  "supportUrl": "https://github.com/kiff/kiff-plugins/issues",
+  "userConfig": {
+    "gateway_key": {
+      "type": "string",
+      "title": "KIFF gateway key",
+      "description": "This agent's KIFF gateway key, from KIFF Cloud: the agent's Tools tab, Connect to the KIFF gateway. It is bound to one agent and can only ask; never use an owner or admin key. Leave empty to use the skills without the gateway.",
+      "sensitive": true,
+      "required": false
+    }
+  }
 }
