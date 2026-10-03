@@ -78,8 +78,12 @@ another tool to make a change KIFF held or refused.*
 - **Enforced:** an agent's key can never answer a hold, and no principal
   answers a hold on an action it proposed. Holds are answered by the
   account's people in KIFF Cloud. With separation of duties on, holds are
-  answered only from a signed-in session, and the people who can change
-  Cards cannot answer them.
+  answered only by approvers, from a signed-in session: the people who can
+  change Cards (admins, editors) cannot answer them, and no API key can.
+- **Recommended:** separation of duties is off by default, so an account of
+  one person can still answer its holds. A company with more than one person
+  should turn it on: **Dashboard → People**, the separation-of-duties policy
+  (admins only). KIFF keeps at least one active approver while it is on.
 - **Guidance:** the skill tells Claude to wait for the owner and never to
   answer a hold.
 
@@ -111,8 +115,11 @@ the refund directly".*
   Card. Calls over the Card are still held or refused, and every call is
   recorded under that agent.
 - **Mitigation:** Claude Code keeps the key in its secure storage, and KIFF
-  shows it once. Revoke it in KIFF Cloud and connect the agent again. An OAuth connection can also be revoked; its access token
-  lasts one hour, and a reused refresh token ends the connection.
+  shows it once. Revoke it on the agent's **Keys** tab in KIFF Cloud, which
+  lists every key bound to the agent, and connect the agent again. An OAuth
+  sign-in connection's key is listed there too, labeled "connected with
+  sign-in"; revoking it ends the connection. Its access token lasts one hour,
+  and a reused refresh token ends the connection.
 
 ### A retry runs an action twice
 
