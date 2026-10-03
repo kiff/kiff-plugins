@@ -218,6 +218,7 @@ page. You do not need to notify anyone else. An approval links only to
 | kiff-guard: SDK and 11 framework adapters (Python, TypeScript, MIT) | <https://github.com/kiff/kiff-guard> · PyPI `kiff-guard` · npm `@kiff/kiff-guard` |
 | kiff-scan: find unguarded consequential actions in Python agents (MIT) | <https://github.com/kiff/kiff-scan> · `uvx kiff-scan scan .` |
 | Domain-authoring skill (`kiff.yaml`) | <https://kiff.dev/skills/kiff-domains.md> |
+| Claude Code plugin (gateway server + both skills) | <https://github.com/kiff/kiff-plugins> · `/plugin install kiff@kiff` |
 | This skill | <https://kiff.dev/skills/kiff.md> |
 
 Key pages: [Quickstart](https://kiff.dev/docs/quickstart),
