@@ -67,31 +67,27 @@ owner or an admin. Walk them through it; do not do it for them.
 2. **Give the agent a Card.** **Tools → Give an agent a Card** on that tool.
    See [Propose a Card](#propose-a-card) for what to suggest.
 3. **Create the agent's gateway key.** **Agents →** the agent **→ Tools →
-   Connect to the KIFF gateway**. KIFF shows the key once, already inside the
-   Claude Code and Codex configuration. The key is bound to that agent and
-   can only ask; it cannot connect tools, issue Cards or answer approvals.
-4. **Point the agent at KIFF.** The MCP server URL is
-   `https://mcp.kiff.dev/mcp`, with the gateway key as a bearer token.
+   Connect to the KIFF gateway**. KIFF shows the key once, with the setup for
+   Claude Code and Codex. The key is bound to that agent and can only ask; it
+   cannot connect tools, issue Cards or answer approvals.
+4. **Point the agent at KIFF.** The MCP server is `https://mcp.kiff.dev/mcp`,
+   with the agent's gateway key as a bearer token. The person configures
+   their client themselves. **You never read, store or type the key.** If
+   they ask how:
 
-   Claude Code:
+   - **Claude Code:** install the KIFF plugin (`/plugin marketplace add
+     kiff/kiff-plugins`, then `/plugin install kiff@kiff`). Claude Code asks
+     for the key when the plugin is enabled and keeps it in its secure
+     storage. Or paste the Claude Code configuration KIFF Cloud showed.
+   - **Codex:** follow the Codex setup KIFF Cloud showed: a `config.toml`
+     entry, with the key kept in the agent's environment rather than in the
+     file. The person sets that up; you don't. Codex asks
+     before every MCP tool call by default; to let calls through without
+     pausing, the person can add `default_tools_approval_mode = "approve"`
+     under `[mcp_servers.kiff]` (not at the top level). That is their
+     choice; the Card still applies either way.
 
-   ```bash
-   claude mcp add --transport http kiff https://mcp.kiff.dev/mcp \
-     --header "Authorization: Bearer $KIFF_GATEWAY_KEY"
-   ```
-
-   Codex (`~/.codex/config.toml`), with the key in `KIFF_GATEWAY_KEY`:
-
-   ```toml
-   [mcp_servers.kiff]
-   url = "https://mcp.kiff.dev/mcp"
-   bearer_token_env_var = "KIFF_GATEWAY_KEY"
-   ```
-
-   Codex asks before every MCP tool call by default. To let calls through
-   without pausing, the person can add `default_tools_approval_mode =
-   "approve"` under `[mcp_servers.kiff]` (not at the top level). That is
-   their choice; the Card still applies either way.
+   Full setup for each client: <https://kiff.dev/docs/mcp-gateway>.
 5. **Remove the direct path.** If the agent also had the tool server
    configured directly, remove that entry. Otherwise the Card governs only
    one of two routes to the same tool.
@@ -121,13 +117,12 @@ uvx kiff-scan scan .
 
 ### With the decision API
 
-One call before the side effect, never after:
-
-```bash
-curl -s -X POST https://api.kiff.dev/v1/proposals/decide \
-  -H "Authorization: Bearer $KIFF_API_KEY" -H "Content-Type: application/json" \
-  -d '{"entity_type":"Order","entity_id":"order-1042","action_name":"REFUND_ORDER","actor_id":"refund-agent","parameters":{"amount_cents":4200}}'
-```
+One call before the side effect, never after: `POST
+https://api.kiff.dev/v1/proposals/decide` with the entity, the action, the
+agent's id and the parameters, authenticated with an API key bound to the
+agent. The person's code reads that key from its own configuration; you do
+not handle it. Request and response format:
+<https://kiff.dev/docs/connect-an-agent#call-the-decision-api-directly>.
 
 Run the action only when `outcome` is `allowed`. On `approval_required`, stop
 and let the owner answer. On `blocked` or `invalid`, do not run it and show
