@@ -13,9 +13,10 @@ This plugin **reads and writes**.
   allows the call, KIFF forwards it to the tool. If not, the call waits for
   an approver or is refused. The tool owner marks each tool as read-only or
   not when connecting it.
-- **The `kiff` skill** drafts Card terms for an admin to issue. With a KIFF API key you supply, it may also send one
-  decision request (`POST https://api.kiff.dev/v1/proposals/decide`). It never
-  issues or changes a Card, and never answers a held call.
+- **The `kiff` skill** drafts Card terms for an admin to issue. With a KIFF
+  API key you supply, it may also send one decision request
+  (`POST https://api.kiff.dev/v1/proposals/decide`). It never issues or
+  changes a Card, and never answers a held call.
 - **The `kiff-domains` skill** reads and writes `kiff.yaml` files in your
   working directory when you ask it to. It sends nothing to KIFF.
 
