@@ -1,6 +1,6 @@
-# KIFF for Claude Code
+# KIFF Cards for Claude Code
 
-**Limits and approvals for the AI agents your company runs.**
+**Delegated authority for the AI agents your company runs.**
 
 Your agents can issue refunds, grant credits, change plans or update customer
 accounts. KIFF lets you decide how far each one may go, and checks every call
@@ -57,7 +57,7 @@ In Claude Code:
 
 ```text
 /plugin marketplace add kiff/kiff-plugins
-/plugin install kiff@kiff
+/plugin install kiff-cards@kiff
 ```
 
 Claude Code asks for the **KIFF gateway key** when you enable the plugin and

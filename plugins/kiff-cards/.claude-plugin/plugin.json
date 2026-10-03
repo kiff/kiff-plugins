@@ -1,8 +1,8 @@
 {
-  "name": "kiff",
-  "displayName": "KIFF",
+  "name": "kiff-cards",
+  "displayName": "KIFF Cards: delegated authority for AI agents",
   "version": "0.1.0",
-  "description": "For companies whose AI agents issue refunds, credits or account changes. Set what each agent may do and how much; calls over the limit wait for your approval or are refused.",
+  "description": "Give each AI agent an authority card: which actions it may take, how much, and who approves the rest. For companies whose agents act on their money and customer accounts.",
   "author": {
     "name": "KIFF",
     "url": "https://kiff.dev"
@@ -11,12 +11,15 @@
   "repository": "https://github.com/kiff/kiff-plugins",
   "license": "MIT",
   "keywords": [
-    "kiff",
-    "agents",
-    "mcp",
-    "authorization",
+    "agent authority",
+    "delegated authority",
+    "agent delegation",
+    "action controls",
+    "tool authorization",
+    "agent mandate",
+    "agent trust",
     "approvals",
-    "limits"
+    "mcp"
   ],
   "icon": "./.claude-plugin/icon.png",
   "privacyPolicyUrl": "https://kiff.dev/privacy",

@@ -5,13 +5,13 @@
     "email": "gabriel@kiff.dev"
   },
   "metadata": {
-    "description": "KIFF for Claude Code: limits and approvals for the AI agents your company runs."
+    "description": "KIFF for Claude Code: delegated authority for the AI agents your company runs."
   },
   "plugins": [
     {
-      "name": "kiff",
-      "source": "./plugins/kiff",
-      "description": "For companies whose AI agents issue refunds, credits or account changes. Set what each agent may do and how much; calls over the limit wait for your approval or are refused.",
+      "name": "kiff-cards",
+      "source": "./plugins/kiff-cards",
+      "description": "Give each AI agent an authority card: which actions it may take, how much, and who approves the rest. For companies whose agents act on their money and customer accounts.",
       "version": "0.1.0",
       "homepage": "https://kiff.dev/docs/agent-skill",
       "license": "MIT"
