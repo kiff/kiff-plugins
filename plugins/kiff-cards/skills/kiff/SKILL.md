@@ -76,7 +76,7 @@ owner or an admin. Walk them through it; do not do it for them.
    they ask how:
 
    - **Claude Code:** install the KIFF plugin (`/plugin marketplace add
-     kiff/kiff-plugins`, then `/plugin install kiff@kiff`). Claude Code asks
+     kiff/kiff-plugins`, then `/plugin install kiff-cards@kiff`). Claude Code asks
      for the key when the plugin is enabled and keeps it in its secure
      storage. Or paste the Claude Code configuration KIFF Cloud showed.
    - **Codex:** follow the Codex setup KIFF Cloud showed: a `config.toml`
@@ -213,7 +213,7 @@ page. You do not need to notify anyone else. An approval links only to
 | kiff-guard: SDK and 11 framework adapters (Python, TypeScript, MIT) | <https://github.com/kiff/kiff-guard> · PyPI `kiff-guard` · npm `@kiff/kiff-guard` |
 | kiff-scan: find unguarded consequential actions in Python agents (MIT) | <https://github.com/kiff/kiff-scan> · `uvx kiff-scan scan .` |
 | Domain-authoring skill (`kiff.yaml`) | <https://kiff.dev/skills/kiff-domains.md> |
-| Claude Code plugin (gateway server + both skills) | <https://github.com/kiff/kiff-plugins> · `/plugin install kiff@kiff` |
+| Claude Code plugin `kiff-cards` (gateway server + both skills) | <https://github.com/kiff/kiff-plugins> · `/plugin install kiff-cards@kiff` |
 | This skill | <https://kiff.dev/skills/kiff.md> |
 
 Key pages: [Quickstart](https://kiff.dev/docs/quickstart),
