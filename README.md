@@ -1,24 +1,55 @@
-# KIFF plugins for Claude Code
+# KIFF for Claude Code
 
-[KIFF](https://kiff.dev) gives each AI agent a **Card**: which actions it may
-take, how much per call and per day, and what happens to a call outside it (it
-waits for the owner, or it is refused). KIFF checks every call against the Card
-before it runs. The owner changes or revokes the Card without changing the
-agent.
+**Limits and approvals for the AI agents your company runs.**
 
-This repository is a Claude Code plugin marketplace with one plugin, `kiff`.
+Your agents can issue refunds, grant credits, change plans or update customer
+accounts. KIFF lets you decide how far each one may go, and checks every call
+before it runs.
 
-## What the `kiff` plugin adds
+Each agent gets a **Card**:
 
-- **The KIFF MCP gateway** as an MCP server named `kiff`
-  (`https://mcp.kiff.dev/mcp`), using the gateway key you enter when you enable
-  the plugin. Tools your account connected to KIFF show up
-  here, and every call is checked against this agent's Card first.
-- **The `kiff` skill**: connect an agent or a remote MCP tool to KIFF, draft a
-  Card for the owner to issue, and handle a held call correctly: tell you it is
-  waiting, retry the identical call with the same `kiff_operation_id`, and never
-  make the same change another way.
-- **The `kiff-domains` skill**: author and extend `kiff.yaml` domains.
+- **which actions** it may take (refund an order, not cancel a subscription);
+- **how much**: the most per action and a total per day;
+- **what happens over the limit**: the call waits for someone on your team to
+  approve it, or it is refused.
+
+You change or revoke a Card at any time, without redeploying the agent. Every
+decision is recorded with a signed receipt, so you can show who allowed what.
+
+## Who it is for
+
+Engineering and operations teams at companies that let AI agents act on their
+own money or customer accounts, and the agencies and builders who deliver
+those agents to clients. You need a KIFF Cloud account for your company
+([kiff.dev](https://kiff.dev)).
+
+## What your team does with it
+
+1. **Connect a tool.** Put the tool your agent uses, for example a refund tool,
+   behind KIFF. The agent can now reach it only through its Card.
+2. **Set the Card.** Ask Claude to propose limits for the agent. An admin on
+   your team reviews them and issues the Card in KIFF Cloud.
+3. **Run the agent.** Calls inside the Card go through. Calls over it wait:
+   your approver is told in KIFF Cloud, by email and in Claude Code, answers
+   in KIFF Cloud, and the call is refused if no one answers in time.
+
+Try asking Claude:
+
+```text
+Connect our refund tool to KIFF and give the support agent a Card.
+What limits should this agent have? It refunds about 30 euros, around ten times a day.
+KIFF held my last call. What happens now?
+```
+
+## What is in the plugin
+
+- **The KIFF MCP gateway** (`https://mcp.kiff.dev/mcp`): the tools your company
+  connected to KIFF, each call checked against this agent's Card.
+- **The `kiff` skill**: connects a tool, drafts a Card for an admin to issue,
+  and handles a held call correctly. It never approves its own call or works
+  around a refusal.
+- **The `kiff-domains` skill**: defines the business rules a Card builds on, in
+  a `kiff.yaml` file.
 
 ## Install
 
@@ -37,9 +68,6 @@ gateway**. KIFF shows the key once.
 The key is bound to one agent and can only ask: it cannot connect tools, issue
 Cards or answer approvals. Never enter an owner or admin key. Leave it empty
 and the skills still work; the `kiff` MCP server just does not connect.
-
-New to KIFF? Install the plugin and ask: *"Connect my refund tool to KIFF and
-give this agent a Card."* The skill walks you through it.
 
 ## What it will not do
 

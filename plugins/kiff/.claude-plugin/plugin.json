@@ -2,7 +2,7 @@
   "name": "kiff",
   "displayName": "KIFF",
   "version": "0.1.0",
-  "description": "Connect an agent to KIFF through the MCP gateway, propose a Card for the owner, handle held calls without routing around the Card, and author kiff.yaml domains.",
+  "description": "For companies whose AI agents issue refunds, credits or account changes. Set what each agent may do and how much; calls over the limit wait for your approval or are refused.",
   "author": {
     "name": "KIFF",
     "url": "https://kiff.dev"

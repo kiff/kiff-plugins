@@ -5,13 +5,13 @@
     "email": "gabriel@kiff.dev"
   },
   "metadata": {
-    "description": "KIFF plugins for Claude Code. KIFF gives each AI agent a Card and checks every call against it before it runs."
+    "description": "KIFF for Claude Code: limits and approvals for the AI agents your company runs."
   },
   "plugins": [
     {
       "name": "kiff",
       "source": "./plugins/kiff",
-      "description": "Connect an agent to KIFF through the MCP gateway, propose a Card for the owner, handle held calls without routing around the Card, and author kiff.yaml domains.",
+      "description": "For companies whose AI agents issue refunds, credits or account changes. Set what each agent may do and how much; calls over the limit wait for your approval or are refused.",
       "version": "0.1.0",
       "homepage": "https://kiff.dev/docs/agent-skill",
       "license": "MIT"
