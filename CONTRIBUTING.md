@@ -1,51 +1,25 @@
 # Contributing
 
-Thanks for your interest in improving KIFF plugins for Claude Code.
+This repository is small: plugin packaging for Claude Code plus two skills
+copied from kiff.dev. Read `README.md` and `AGENTS.md` first.
 
-## Ways to contribute
+## What to send here
 
-We welcome:
+- README and documentation fixes.
+- Packaging changes (`marketplace.json`, `plugin.json`, `.mcp.json`).
+- Bug reports about installing or running the plugin.
 
-- README and documentation improvements
-- plugin packaging updates
-- skill improvements and clarifications
-- bug reports and fixes
-- security reports through the private reporting flow
+## What not to send here
 
-## Before you start
+- **Skill edits.** The files under `plugins/kiff-cards/skills/` are copies of
+  `kiff.dev/skills/*.md`, and the `skills-in-sync` check fails if they differ.
+  Open an issue that describes the change; it is made on kiff.dev and then
+  copied here.
+- **Security reports.** See `SECURITY.md`. Do not open a public issue.
 
-Please read the repository overview in `README.md` and the agent guidance in `AGENTS.md`.
+## Pull requests
 
-This repository is intentionally small and focused. Changes should stay aligned with the KIFF product model and the published skills hosted at `kiff.dev`.
-
-## Development workflow
-
-1. Fork the repository or create a feature branch.
-2. Make focused, reviewable changes.
-3. Keep documentation and metadata consistent with the package structure.
-4. Avoid introducing secrets, keys, or sample sensitive data.
-5. Submit a pull request with a clear description of the change and why it matters.
-
-## Files to review for packaging changes
-
-When changing plugin behavior or metadata, check these files:
-
-- `README.md`
-- `plugins/kiff-cards/.claude-plugin/plugin.json`
-- `plugins/kiff-cards/.mcp.json`
-- `plugins/kiff-cards/skills/**`
-
-## Documentation standards
-
-- Prefer clear, operational language.
-- Do not claim capabilities that the repository does not implement.
-- Use the same terminology as the KIFF product documentation where possible.
-- When editing the README, keep the product and install story easy to follow for both developers and non-developers.
-
-## Code of conduct
-
-Please keep discussions respectful, constructive, and focused on improving the project and the safety of AI agent integrations.
-
-## Questions
-
-Open an issue if you need clarification about the repository goals, plugin packaging, or expected behavior.
+1. Branch from `main` and keep the change focused.
+2. Do not include keys, tokens or customer data, even as examples.
+3. Say what changed and why. Do not describe behavior the plugin does not have.
+4. `skills-in-sync` must pass.

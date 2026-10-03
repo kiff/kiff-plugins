@@ -1,62 +1,42 @@
 # AGENTS.md
 
-This repository contains the KIFF plugin package for Claude Code and related agent skills.
+This repository packages the KIFF plugin for Claude Code: the KIFF MCP gateway
+and two skills that let an agent connect a tool through KIFF, propose a Card
+for an admin to issue, and handle a held call.
 
-## Purpose
+## Layout
 
-The repository packages a KIFF MCP gateway and skill definitions that allow an AI agent to:
+- `.claude-plugin/marketplace.json`: the marketplace entry that
+  `/plugin marketplace add kiff/kiff-plugins` reads.
+- `plugins/kiff-cards/.claude-plugin/plugin.json`: plugin metadata and icon.
+- `plugins/kiff-cards/.mcp.json`: the `kiff` MCP server
+  (`https://mcp.kiff.dev/mcp`).
+- `plugins/kiff-cards/skills/kiff/SKILL.md` and
+  `plugins/kiff-cards/skills/kiff-domains/SKILL.md`: the skills.
+- `.github/workflows/skills-in-sync.yml`: the CI check described below.
 
-- connect a tool through KIFF
-- propose a Card with suitable limits and approval rules
-- handle a held call according to KIFF policy
+## Skills are copies: do not edit them here
 
-## Repository layout
+Each `SKILL.md` is a byte copy of the file kiff.dev serves
+(`kiff.dev/skills/kiff.md`, `kiff.dev/skills/kiff-domains.md`). The
+`skills-in-sync` workflow runs on every push and pull request, and weekly, and
+it fails when a copy differs. To change a skill, change it on kiff.dev first,
+then download the published file into this repo.
 
-- `README.md` — project introduction, installation instructions, and product overview
-- `plugins/kiff-cards/.claude-plugin/` — Claude plugin metadata and packaging
-- `plugins/kiff-cards/.mcp.json` — MCP gateway configuration for the KIFF server
-- `plugins/kiff-cards/skills/` — skill definitions for the agent
-  - `kiff/` — main skill for connecting tools and handling approvals
-  - `kiff-domains/` — domain-specific business rule definitions and `kiff.yaml`
+## Rules when changing this repo
 
-## Contribution guidance for agents
+- Keep edits small, and use the README's product language.
+- Never add a path that approves a held call, issues a Card, or reaches a tool
+  around the KIFF gateway.
+- Never commit gateway keys, owner or admin keys, API tokens, or customer data.
+  The gateway key is entered by the user in Claude Code at install time; it
+  never belongs in `.mcp.json` or any file here.
 
-When modifying this repository:
+## Checking a change
 
-1. Prefer small, targeted edits.
-2. Preserve the product language used in the KIFF docs and README.
-3. Do not invent approval paths or bypass KIFF's review model.
-4. Keep skill behavior aligned with the published source of truth at `kiff.dev`.
-5. Do not add owner/admin credentials or secret values to source files.
-6. Treat gateway keys, API keys, and bearer tokens as sensitive material.
+- `skills-in-sync` must pass.
+- For packaging changes, check that `marketplace.json`, `plugin.json` and
+  `.mcp.json` agree (name, version, server URL) and that the README install
+  steps still work.
 
-## Sensitive info
-
-Never commit:
-
-- gateway keys
-- administrator or owner keys
-- API tokens
-- customer data or sample records that include live identifiers
-
-## Safety expectations
-
-This project is about agent authority and controlled operations. When changing behavior, make sure the code or instructions still:
-
-- enforce approval boundaries
-- keep policy checks in the KIFF gateway
-- avoid silent bypasses or direct calls around a refusal
-
-## Validation
-
-There are no application tests in this repository by default. For documentation and packaging changes, review the following before submitting:
-
-- README wording and installation instructions
-- `plugin.json` metadata for the Claude plugin
-- MCP configuration in `.mcp.json`
-- any referenced skill files in `plugins/kiff-cards/skills/`
-
-## Related files
-
-- `CONTRIBUTING.md`
-- `SECURITY.md`
+See also `CONTRIBUTING.md` and `SECURITY.md`.

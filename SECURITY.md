@@ -1,47 +1,29 @@
 # Security Policy
 
-## Supported versions
-
-This project is currently maintained in its main branch and receives updates as needed for documentation, packaging, and plugin metadata. We welcome reports for issues that affect the repository as published.
-
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately and responsibly.
+Email **security@kiff.dev**. Do not open a public issue or pull request for a
+vulnerability. KIFF's security policy is at
+[kiff.dev/security](https://kiff.dev/security).
 
-- Use GitHub's private security reporting for this repository when available.
-- If a report cannot be sent privately, contact the maintainers through the repository's preferred secure channel and avoid public disclosure before a fix is available.
-- Do not open a public issue for a security vulnerability.
+Include the affected file or path, what an attacker can do, and steps to
+reproduce.
 
-## What to include in a report
+Only the `main` branch is supported.
 
-When reporting a security issue, include:
+## In scope
 
-- the affected file or plugin path
-- a clear description of the issue and impact
-- reproduction steps or a proof of concept when possible
-- the expected behavior and the vulnerable behavior
-- any relevant environment details
+- The plugin packaging in this repo (`marketplace.json`, `plugin.json`,
+  `.mcp.json`).
+- The skills, where their instructions would lead an agent to approve its own
+  call, issue a Card, ask for an owner or admin credential, or reach a tool
+  around the KIFF gateway.
 
-## Sensitive data handling
+Issues in the KIFF gateway or KIFF Cloud themselves go to the same address.
 
-This project may handle or reference:
+## Secrets
 
-- KIFF gateway keys
-- KIFF API keys
-- bearer tokens
-- customer account data examples
-
-These values must never be committed to source control, published in pull requests, or shared in issue comments.
-
-## Safety expectations
-
-The project deals with delegated AI authority and tool access. Security-sensitive changes should preserve the following:
-
-- Cards remain the policy boundary for tool access
-- approvals are not bypassed or auto-approved by the agent
-- direct calls around the KIFF gateway are not encouraged or documented as a normal path
-- secrets are kept out of repository files and examples
-
-## Disclosure timeline
-
-We aim to acknowledge reports promptly and work toward a fix as quickly as practical. Once a fix is available, we will coordinate disclosure with the reporter and update the project changelog or release notes as needed.
+Never put a KIFF gateway key, API key, owner or admin key, bearer token, or
+customer data in this repo, in an issue, or in a pull request. If you exposed a
+gateway key, revoke it in KIFF Cloud at app.kiff.dev and connect the agent
+again to get a new one.
