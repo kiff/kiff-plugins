@@ -41,7 +41,7 @@ machine, and the plugin sends no telemetry.
 | The call's arguments | Until the call is sent, refused or fails | A held call is sent only after the owner allows it, so KIFF needs the arguments until then. After that they are deleted |
 | The tool's result | 24 hours after the call | So a retry gets the same answer instead of running the action twice. After that it is deleted; a retry is told the call was sent and is never resent |
 | Other arguments, in the decision record | Never | Only the amount reaches KIFF's decision service |
-| A sign-in connection: agent, app name, who allowed it, when, last use | For the life of the account; ended ones are shown for 30 days | So the Connections view shows who connected what, and each can be revoked |
+| A sign-in connection: agent, app name, who allowed it, when, last use | While it is live, then 30 days after it ends (still shown for that time), then deleted with its tokens and key | So the Connections view shows who connected what, and each can be revoked |
 
 If you call the decision API directly, KIFF keeps the numeric parameters a
 limit may count, a hash of the full request, and the agent's free-text
