@@ -97,6 +97,25 @@ The key is bound to one agent and can only ask: it cannot connect tools, issue
 Cards or answer approvals. Never enter an owner or admin key. Leave it empty
 and the skills still work; the `kiff` MCP server just does not connect.
 
+### Or connect an agent with a sign-in, no key
+
+In KIFF Cloud, open the agent, go to its **Tools** tab and choose **Create a
+connect link**. KIFF shows a URL that names that agent. In Claude Code:
+
+```text
+claude mcp add --transport http kiff <the link URL>
+```
+
+The first time Claude Code uses it, a browser opens on `app.kiff.dev`, an
+admin or editor of the account signs in, and the page asks one question:
+allow Claude Code to act as that agent. No key is pasted anywhere. A CLI on a
+machine with no browser shows a code instead; the admin or editor enters it
+at `app.kiff.dev/oauth/device`.
+
+The link URL is not a secret: it only says which agent. Every connection,
+sign-in or key, is listed and can be revoked on **Connections** in KIFF Cloud.
+Revoking the link ends every connection made through it.
+
 ## What it will not do
 
 - Issue or change a Card. It drafts the terms; the owner issues them.

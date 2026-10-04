@@ -45,8 +45,10 @@ A held call is answered by the account's people in KIFF Cloud
 ## What the agent's credential can and cannot do
 
 The plugin's credential is a **gateway key** bound to one agent, holding only
-the `gateway_agent` role. An OAuth sign-in connection, when used, is a handle
-to such a key and has the same limits.
+the `gateway_agent` role. A sign-in connection (OAuth, through a connect link
+or the device code) is a handle to such a key and has the same limits. Its
+token is valid only at the gateway URL it was issued for, and only on the
+gateway's own routes.
 
 | It can | It cannot |
 |---|---|
@@ -121,6 +123,21 @@ the refund directly".*
   sign-in"; revoking it ends the connection. Its access token lasts one hour,
   and a reused refresh token ends the connection.
 
+### Someone tricks an admin into allowing their app
+
+*Example: a stranger sends a connect link, a sign-in link or a device code,
+hoping an admin allows it.*
+
+- **Enforced:** only an admin or editor of the agent's account can allow a
+  connection, and a link for another account is refused. The consent page
+  names the app, the agent and where the browser returns, and marks apps KIFF
+  has not verified. The device page shows the code and asks the person to
+  allow it only if their own terminal shows it. Return addresses are limited
+  to known hosts and this computer.
+- **Mitigation:** every connection is listed on **Connections** with who
+  allowed it, and can be revoked there. A connection still only lets the app
+  ask, within the agent's Card.
+
 ### A retry runs an action twice
 
 - **Enforced:** the gateway records each call before forwarding it, and
@@ -157,6 +174,8 @@ reviewer can ask us about (security@kiff.dev):
 | A call is forwarded at most once | `TestApprovedHoldForwardsOnceUnderConcurrentRetries`, `TestIdenticalCallsWithoutIDsForwardOnce` |
 | An OAuth token reaches only the gateway's routes, as its agent's key | `TestMiddleware_OAuthToken` |
 | An OAuth connection ends, and its key is revoked, when it should | `TestRefreshRotatesAndReuseEndsTheGrant`, `TestReplayedCodeRevokesTheKey`, `TestGrantEnds`, `TestKeyIsMintedOnlyOnExchange` |
+| A connect link fixes the agent and stops when revoked or archived | `TestConnectLinkFixesTheAgent`, `TestConnectLinkOfAnotherAccount`, `TestRevokedLinkStopsEverything`, `TestArchivedAgentStopsItsLinks`, `TestLinkURLAcceptsOnlyItsOwnTokens` |
+| A device code only connects an agent, once | `TestDeviceFlowNewAgent`, `TestDeviceFlowThroughALink`, `TestDeviceFlowDenyAndExpiry` |
 
 ## Reporting
 
