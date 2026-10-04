@@ -23,3 +23,13 @@ copied from kiff.dev. Read `README.md` and `AGENTS.md` first.
 2. Do not include keys, tokens or customer data, even as examples.
 3. Say what changed and why. Do not describe behavior the plugin does not have.
 4. `skills-in-sync` must pass.
+5. If the change touches `plugins/kiff-cards/`, raise `version` in
+   `plugin.json` and `marketplace.json` to the same value, and run both
+   `claude plugin validate ./plugins/kiff-cards` and
+   `claude plugin validate .`.
+
+## Releases
+
+Merging to `main` releases the plugin. Claude's plugin directory picks up
+each new commit on `main`, checks it again, and publishes it when it passes.
+Until then the listing keeps the last published version.

@@ -39,4 +39,20 @@ then download the published file into this repo.
   `.mcp.json` agree (name, version, server URL) and that the README install
   steps still work.
 
+## Releasing
+
+`main` is the release branch. Claude's plugin directory tracks `main`
+(folder `plugins/kiff-cards`): each new commit there is validated and
+security-scanned again, and a version that passes goes live once it is
+published. A version that is held or fails leaves the last published
+version live.
+
+- In every change to `plugins/kiff-cards/`, raise `version` in both
+  `plugins/kiff-cards/.claude-plugin/plugin.json` and
+  `.claude-plugin/marketplace.json`, to the same value.
+- Run `claude plugin validate ./plugins/kiff-cards` and
+  `claude plugin validate .` before opening the PR.
+- Merging to `main` is the release. Do not merge a change that is not ready
+  to ship.
+
 See also `CONTRIBUTING.md` and `SECURITY.md`.
