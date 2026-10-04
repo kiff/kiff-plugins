@@ -66,16 +66,28 @@ owner or an admin. Walk them through it; do not do it for them.
    only, if the tool has one), and whether the tool only reads.
 2. **Give the agent a Card.** **Tools → Give an agent a Card** on that tool.
    See [Propose a Card](#propose-a-card) for what to suggest.
-3. **Create the agent's gateway key.** **Agents →** the agent **→ Tools →
-   Connect to the KIFF gateway**. KIFF shows the key once, with the setup for
-   Claude Code and Codex. The key is bound to that agent and can only ask; it
-   cannot connect tools, issue Cards or answer approvals.
-4. **Point the agent at KIFF.** The MCP server is `https://mcp.kiff.dev/mcp`,
-   with the agent's gateway key as a bearer token. The person configures
-   their client themselves. **You never read, store or type the key.** If
-   they ask how:
+3. **Let the agent in.** On **Agents →** the agent **→ Tools**, one of:
+   - **Connect an app with sign-in → Create a connect link.** KIFF shows a URL
+     that names this agent. The app connects to it, and an admin or editor
+     signs in to KIFF in the browser and allows it. No key is pasted
+     anywhere. A CLI on a server with no browser shows a code instead, and
+     the admin or editor enters it at `app.kiff.dev/oauth/device`.
+   - **Connect to the KIFF gateway.** KIFF shows a gateway key once, with the
+     setup for Claude Code and Codex. Use this for agents that run unattended.
 
-   - **Claude Code:** install the KIFF plugin (`/plugin marketplace add
+   Either way the agent's credential is bound to that agent and can only ask:
+   it cannot connect tools, issue Cards or answer approvals. Every connection
+   is listed, and can be revoked, on **Connections**.
+4. **Point the agent at KIFF.** With a connect link, the MCP server is the
+   link's URL and the client signs in by itself. With a key, the MCP server is
+   `https://mcp.kiff.dev/mcp`, with the agent's gateway key as a bearer token.
+   The person configures their client themselves.
+   **You never read, store or type the key.** You never allow a sign-in or
+   enter a code for them either. If they ask how:
+
+   - **Claude Code with a connect link:** `claude mcp add --transport http
+     kiff <link URL>`, then follow the sign-in when Claude Code asks.
+   - **Claude Code with a key:** install the KIFF plugin (`/plugin marketplace add
      kiff/kiff-plugins`, then `/plugin install kiff-cards@kiff`). Claude Code asks
      for the key when the plugin is enabled and keeps it in its secure
      storage. Or paste the Claude Code configuration KIFF Cloud showed.
@@ -92,7 +104,8 @@ owner or an admin. Walk them through it; do not do it for them.
    configured directly, remove that entry. Otherwise the Card governs only
    one of two routes to the same tool.
 
-Limits today: remote MCP servers only, bearer credentials only. No OAuth, no
+Limits today, for the tools KIFF connects to: remote MCP servers only, with a
+bearer credential (KIFF does not sign in to a tool with OAuth yet), no
 arbitrary HTTP APIs. Private, loopback and metadata addresses are refused.
 
 ### With kiff-guard (agents in your own code)
