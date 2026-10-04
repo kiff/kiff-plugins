@@ -1,6 +1,15 @@
-# KIFF Cards for Claude Code
+# KIFF Plugins
 
-**Delegated authority for the AI agents your company runs.**
+**Beta.** The plugin and its setup steps may change between versions. Report
+problems in [issues](https://github.com/kiff/kiff-plugins/issues).
+
+This repository holds **KIFF Cards**, a plugin for Claude Code: delegated
+authority for the AI agents your company runs.
+
+**The plugin is not the security boundary.** Its skills are instructions to
+Claude. The KIFF MCP gateway (`mcp.kiff.dev`) enforces each agent's Card on
+KIFF's servers, for every call that goes through it, whatever the
+instructions say. See [What enforces the Card](#what-enforces-the-card).
 
 It works with a KIFF Cloud account. Create one at [kiff.dev](https://kiff.dev);
 sign-up is open.
