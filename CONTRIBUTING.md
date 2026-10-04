@@ -24,8 +24,9 @@ copied from kiff.dev. Read `README.md` and `AGENTS.md` first.
 3. Say what changed and why. Do not describe behavior the plugin does not have.
 4. `skills-in-sync` must pass.
 5. If the change touches `plugins/kiff-cards/`, raise `version` in
-   `plugin.json` and `marketplace.json` to the same value, and run
-   `claude plugin validate ./plugins/kiff-cards`.
+   `plugin.json` and `marketplace.json` to the same value, and run both
+   `claude plugin validate ./plugins/kiff-cards` and
+   `claude plugin validate .`.
 
 ## Releases
 
