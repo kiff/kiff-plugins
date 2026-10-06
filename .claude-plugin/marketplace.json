@@ -15,6 +15,14 @@
       "version": "0.1.0",
       "homepage": "https://kiff.dev/docs/agent-skill",
       "license": "MIT"
+    },
+    {
+      "name": "kiff-cards-ui",
+      "source": "./plugins/kiff-cards-ui",
+      "description": "Beta, optional. Shows what is left on the agent's KIFF Card in the status line, tells you when KIFF holds a call, and lists this session's KIFF calls in a /kiff pane. Display only. Use with kiff-cards.",
+      "version": "0.1.0",
+      "homepage": "https://kiff.dev/docs/agent-skill",
+      "license": "MIT"
     }
   ]
 }

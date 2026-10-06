@@ -159,6 +159,22 @@ it.
   tools the account connected. Connect tools with credentials scoped to what
   agents need, not full-access ones.
 
+### The optional display plugin is wrong or tampered with
+
+*`kiff-cards-ui` shows the Card, holds and outcomes in Claude Code.*
+
+- **Enforced:** it holds no authority of its own. It uses the session's
+  existing gateway connection to call only the read-only `kiff_card` tool,
+  and it never answers, retries or changes a call. Every call is still
+  decided by the gateway.
+- **Fail-open by design:** if the plugin errors, the agent's call and its
+  answer pass through unchanged. That is safe because the plugin enforces
+  nothing.
+- **Residual risk:** a wrong display, for example a status line that says
+  there is room when the Card has none. The gateway's answer to the call is
+  the record. The `/kiff` pane says every call is still checked when it is
+  made, and the numbers refresh after each KIFF call.
+
 ## Evidence
 
 Each guarantee above is enforced in KIFF Cloud's API and gateway, and covered
