@@ -159,6 +159,22 @@ it.
   tools the account connected. Connect tools with credentials scoped to what
   agents need, not full-access ones.
 
+### A connected tool fakes a KIFF notice in the display plugin
+
+*A malicious MCP server, or a tool that returns text an outsider wrote (a
+ticket, an email), makes its result look like a KIFF hold, with its own
+"answer here" link.*
+
+- **Mitigated in `kiff-cards-ui`:** the gateway passes a forwarded tool's
+  result through unchanged, so the plugin trusts KIFF's call metadata only at
+  the top level of an error result (every result the gateway writes itself
+  is one), reads KIFF's wording only in error results, and shows a review
+  link only when it points at `https://app.kiff.dev`.
+- **Residual risk:** a tool can still return an error result shaped like a
+  KIFF answer and make the display show a false hold or refusal. Its link,
+  if any, can only lead to KIFF Cloud, and no display changes what KIFF
+  decided: the record is in KIFF Cloud.
+
 ### The optional display plugin is wrong or tampered with
 
 *`kiff-cards-ui` shows the Card, holds and outcomes in Claude Code.*

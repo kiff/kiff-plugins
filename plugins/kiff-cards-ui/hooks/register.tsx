@@ -19,6 +19,7 @@ import {
   readAnswer,
   statusLine,
   summarizeCard,
+  summarizeCardText,
   upsert,
 } from './kiff'
 
@@ -57,7 +58,8 @@ async function refreshCard($: Engine) {
   if (!name) return
   const res = await $.mcp.call(name, CARD_TOOL, {})
   if (res.isError) return
-  const summary = summarizeCard(res.structuredContent)
+  const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
+  const summary = summarizeCard(res.structuredContent) ?? summarizeCardText(text)
   if (summary) await update($, card, () => summary)
 }
 
@@ -94,12 +96,12 @@ export const register: Register = on => {
 
       if (kiff.tool === CARD_TOOL) {
         const structured = (ran.result as { structuredContent?: unknown } | undefined)?.structuredContent
-        const summary = summarizeCard(structured)
+        const summary = summarizeCard(structured) ?? summarizeCardText(ran.text)
         if (summary) await update($, card, () => summary)
       } else {
         const answer = readAnswer(ran.result, ran.text, ran.isError)
         const call: KiffCall = {
-          ...describeCall(e as Record<string, unknown>, e.tool_use_id),
+          ...describeCall(kiff.server, kiff.tool, e as Record<string, unknown>),
           tool: kiff.tool,
           ...answer,
           at: await $.clock.now(),

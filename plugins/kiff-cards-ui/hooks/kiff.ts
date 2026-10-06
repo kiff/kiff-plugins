@@ -31,24 +31,30 @@ type GatewayCall = {
   hold_expires_at?: string
 }
 
-/** Finds _meta["dev.kiff/call"] wherever the engine kept the result's _meta. */
+/** Where a person answers a hold. A link anywhere else is not shown. */
+export const REVIEW_ORIGIN = 'https://app.kiff.dev'
+
+/**
+ * The gateway's _meta["dev.kiff/call"], read only at the top level of the
+ * result. A forwarded tool's result passes through the gateway unchanged,
+ * so a nested copy could have been written by the tool.
+ */
 export function gatewayMeta(result: unknown): GatewayCall | undefined {
-  const seen = new Set<unknown>()
-  const walk = (v: unknown, depth: number): GatewayCall | undefined => {
-    if (!v || typeof v !== 'object' || depth > 4 || seen.has(v)) return undefined
-    seen.add(v)
-    const meta = (v as Record<string, unknown>)._meta
-    if (meta && typeof meta === 'object') {
-      const call = (meta as Record<string, unknown>)[META_KEY]
-      if (call && typeof call === 'object') return call as GatewayCall
-    }
-    for (const child of Array.isArray(v) ? v : Object.values(v)) {
-      const found = walk(child, depth + 1)
-      if (found) return found
-    }
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined
+  const meta = (result as Record<string, unknown>)._meta
+  if (!meta || typeof meta !== 'object') return undefined
+  const call = (meta as Record<string, unknown>)[META_KEY]
+  return call && typeof call === 'object' ? (call as GatewayCall) : undefined
+}
+
+/** The review link, only when it points at KIFF Cloud. */
+export function reviewLink(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  try {
+    return new URL(url).origin === REVIEW_ORIGIN ? url : undefined
+  } catch {
     return undefined
   }
-  return walk(result, 0)
 }
 
 const STATES: Record<string, KiffCallState> = {
@@ -61,48 +67,88 @@ const STATES: Record<string, KiffCallState> = {
   failed: 'failed',
 }
 
-/** What KIFF answered, from the metadata when present, else from the text. */
+// The results the gateway writes itself, by how their text starts
+// (apps/gateway/internal/gateway/gateway.go). Each is an error result.
+const TEXTS: { prefix: string; state: KiffCallState; reasons?: string[] }[] = [
+  { prefix: "Waiting for the owner's approval", state: 'held' },
+  { prefix: "KIFF could not be asked for the owner's answer just now", state: 'held', reasons: ['decide_unavailable'] },
+  { prefix: 'Refused: kiff_operation_id ', state: 'refused', reasons: ['operation_id_reused'] },
+  { prefix: 'This call is still being decided', state: 'deciding' },
+  { prefix: 'This call has been sent to the tool and its result is not in yet', state: 'sending' },
+  { prefix: 'This call was sent to the tool at', state: 'allowed' },
+  { prefix: 'Sent to the tool, but its response was lost', state: 'unknown', reasons: ['response_lost'] },
+  { prefix: 'KIFF could not record this call', state: 'failed', reasons: ['call_not_recorded'] },
+  { prefix: 'KIFF could not be asked for a decision', state: 'failed', reasons: ['decide_unavailable'] },
+  { prefix: "The tool's stored credential could not be read", state: 'failed', reasons: ['credential_unreadable'] },
+  { prefix: 'The tool could not be reached', state: 'failed', reasons: ['tool_unreachable'] },
+]
+
+/**
+ * What KIFF answered. Only an error result can be one the gateway wrote
+ * (kiffResult always marks it so); anything else is the tool's own result
+ * after KIFF let the call through.
+ */
 export function readAnswer(
   result: unknown,
   text: string | undefined,
   isError: boolean | undefined,
 ): Pick<KiffCall, 'state' | 'reasons' | 'reviewUrl' | 'holdExpiresAt'> {
+  if (isError !== true) return { state: 'allowed' }
   const meta = gatewayMeta(result)
   if (meta?.state && STATES[meta.state]) {
     return {
       state: STATES[meta.state]!,
       reasons: meta.reasons?.length ? meta.reasons : undefined,
-      reviewUrl: meta.review_url || undefined,
+      reviewUrl: reviewLink(meta.review_url),
       holdExpiresAt: meta.hold_expires_at || undefined,
     }
   }
   const t = text ?? ''
-  if (t.startsWith("Waiting for the owner's approval")) {
-    return {
-      state: 'held',
-      reviewUrl: /The owner can answer at (\S+?)\.(\s|$)/.exec(t)?.[1],
-      holdExpiresAt: /has not answered by (\S+?), the call is refused/.exec(t)?.[1],
-    }
-  }
   const refused = /^Refused by KIFF \(([^):]*)(?::\s*([^)]*))?\)/.exec(t)
   if (refused) {
     const reasons = refused[2]?.split(',').map(r => r.trim()).filter(Boolean)
     return { state: 'refused', reasons: reasons?.length ? reasons : undefined }
   }
-  if (t.startsWith('This call is still being decided')) return { state: 'deciding' }
-  if (t.startsWith('This call has been sent to the tool and its result is not in yet')) return { state: 'sending' }
-  if (t.startsWith('This call was sent to the tool at')) return { state: 'allowed' }
-  // No KIFF wording: the gateway forwarded the call and this is the tool's
-  // own result.
-  return { state: isError ? 'tool_error' : 'allowed' }
+  const known = TEXTS.find(k => t.startsWith(k.prefix))
+  if (known?.state === 'held' && !known.reasons) {
+    return {
+      state: 'held',
+      reviewUrl: reviewLink(/The owner can answer at (\S+?)\.(\s|$)/.exec(t)?.[1]),
+      holdExpiresAt: /has not answered by (\S+?), the call is refused/.exec(t)?.[1],
+    }
+  }
+  if (known) return { state: known.state, reasons: known.reasons }
+  // Not KIFF's wording: the call was forwarded and the tool reported an error.
+  return { state: 'tool_error' }
 }
 
-/** The call's key and its amount argument, from the tool call's input. */
-export function describeCall(input: Record<string, unknown>, fallbackKey: string): Pick<KiffCall, 'key' | 'amount'> {
+// Keys of tool.call's input that are the engine's, not the tool's.
+const RESERVED = new Set(['tool', 'tool_use_id', 'agentId', 'consent', OPERATION_ARG])
+
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    return `{${Object.keys(o).sort().map(k => `${JSON.stringify(k)}:${canonical(o[k])}`).join(',')}}`
+  }
+  return JSON.stringify(v) ?? 'null'
+}
+
+/**
+ * The call's key and its amount argument. The gateway scopes an operation
+ * id per tool, and without one treats an identical call as a retry, so the
+ * key is the server and tool plus the operation id, or else the arguments.
+ * The gateway counts an identical call as a retry only within 10 minutes;
+ * here a later identical call without an id replaces the earlier entry.
+ */
+export function describeCall(server: string, tool: string, input: Record<string, unknown>): Pick<KiffCall, 'key' | 'amount'> {
   const op = input[OPERATION_ARG]
-  const key = typeof op === 'string' && op !== '' ? op : fallbackKey
-  const amountArg = Object.keys(input).find(k => /amount/i.test(k) && (typeof input[k] === 'number' || typeof input[k] === 'string'))
-  return { key, amount: amountArg ? `${amountArg} ${String(input[amountArg])}` : undefined }
+  const args: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(input)) if (!RESERVED.has(k)) args[k] = v
+  const key = typeof op === 'string' && op !== '' ? `${server}/${tool}#op:${op}` : `${server}/${tool}#args:${canonical(args)}`
+  // A guess: the first argument named like an amount.
+  const amountArg = Object.keys(args).find(k => /amount/i.test(k) && (typeof args[k] === 'number' || typeof args[k] === 'string'))
+  return { key, amount: amountArg ? `${amountArg} ${String(args[amountArg])}` : undefined }
 }
 
 /** Adds an answer, or replaces the earlier answer for the same call. */
@@ -140,6 +186,21 @@ export function summarizeCard(structured: unknown): KiffCard | undefined {
   const unit = arg ?? 'calls'
   const window = WINDOWS[tightest.window ?? ''] ?? 'in this window'
   return { summary: `${tightest.remaining} of ${tightest.limit} ${unit} left ${window}`, issued: true }
+}
+
+/**
+ * The same line from kiff_card's text, for when the structured result does
+ * not reach the plugin (the tool declares no output schema).
+ */
+export function summarizeCardText(text: string | undefined): KiffCard | undefined {
+  if (!text || !text.startsWith('You act as agent ')) return undefined
+  if (text.includes('No Card of yours applies here')) return { summary: 'no Card issued', issued: false }
+  let best: { remaining: number; limit: number; line: string } | undefined
+  for (const m of text.matchAll(/(\d+) of (\d+) (\S+) left (today|in the last hour|in the last 24 hours|in this window)/g)) {
+    const remaining = Number(m[1]), limit = Number(m[2])
+    if (limit > 0 && (!best || remaining / limit < best.remaining / best.limit)) best = { remaining, limit, line: m[0] }
+  }
+  return { summary: best ? best.line : 'Card active', issued: true }
 }
 
 /** The status line: the Card, then how many calls wait for a person. */

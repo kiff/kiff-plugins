@@ -148,6 +148,9 @@ call, so a held call keeps waiting for a person in KIFF Cloud, and only the
 agent's own retry of the same call gets their answer. If it fails, calls go
 on as they would without it: the gateway enforces the Card either way.
 
+The amount it shows is a guess: the first argument whose name contains
+"amount". Links in a notice or the pane open only `https://app.kiff.dev`.
+
 ## What it will not do
 
 - Issue or change a Card. It drafts the terms; the owner issues them.

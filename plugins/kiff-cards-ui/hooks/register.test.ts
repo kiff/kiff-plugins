@@ -79,6 +79,18 @@ test("the agent's retry after approval replaces the hold, with no second notice"
   await ui.unmount()
 })
 
+test('a held call retried without an operation id: one notice, and no phantom hold after approval', async ($, on) => {
+  let approved = false
+  const seen = gateway(on, () => (approved ? { text: 'Refund re_9 created.', isError: false } : { text: HELD, isError: true }))
+  await $.tool.call({ tool: 'mcp__kiff__refund', amount: 80, order: 'o_1' })
+  await $.tool.call({ tool: 'mcp__kiff__refund', amount: 80, order: 'o_1' })
+  expect(seen.toasts.length).toBe(1)
+  expect(seen.status).toMatch(/· 1 waiting for approval$/)
+  approved = true
+  await $.tool.call({ tool: 'mcp__kiff__refund', amount: 80, order: 'o_1' })
+  expect(seen.status ?? '').not.toMatch(/waiting/)
+})
+
 test('reads the Card through kiff_card only, and shows what is left', async ($, on) => {
   const seen = gateway(on, () => ({ text: 'Refund re_1 created.', isError: false }))
   await $.tool.call({ tool: 'mcp__kiff__refund', amount: 20, kiff_operation_id: 'op-2' })
