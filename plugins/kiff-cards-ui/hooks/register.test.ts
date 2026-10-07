@@ -132,3 +132,20 @@ test('at session start, the Card is read once the gateway has connected', async 
   expect(tries).toBe(2)
   expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
 })
+
+test("when permissions refuse the kiff_card read, it stops reading in the background", async ($, on) => {
+  let reads = 0
+  on('ui.status', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: NOW }))
+  on('tool.list', () => ({ value: [{ name: 'mcp__kiff__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
+  on('mcp.call', () => {
+    reads++
+    return { value: { content: [{ type: 'text', text: "Claude requested permissions to use mcp__kiff__kiff_card, but you haven't granted it yet." }], isError: true } }
+  })
+  on('ui.toast', () => ({ value: undefined }))
+  on('tool.call', () => ({ result: 'Error: x', text: HELD, isError: true }) as never)
+  await $.tool.call({ tool: 'mcp__kiff__get_orders', customer_id: 'cus_1' })
+  await $.tool.call({ tool: 'mcp__kiff__get_orders', customer_id: 'cus_2' })
+  await $.tool.call({ tool: 'mcp__kiff__get_orders', customer_id: 'cus_3' })
+  expect(reads).toBe(1)
+})

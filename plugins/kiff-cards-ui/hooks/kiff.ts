@@ -214,6 +214,11 @@ export function summarizeCardText(text: string | undefined): KiffCard | undefine
   return { summary: best ? best.line : 'Card active', issued: true }
 }
 
+/** True when Claude Code's permissions, not KIFF, refused a call. */
+export function permissionRefused(text: string): boolean {
+  return /requested permissions to use .+, but you haven't granted it yet/.test(text)
+}
+
 /** The status line: the Card, then how many calls wait for a person. */
 export function statusLine(card: KiffCard | null, calls: readonly KiffCall[], now: number): string | undefined {
   const waiting = calls.filter(c => c.state === 'held' && !holdEnded(c, now)).length

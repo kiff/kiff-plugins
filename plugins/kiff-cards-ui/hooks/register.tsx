@@ -16,6 +16,7 @@ import {
   heldToast,
   holdEnded,
   kiffTool,
+  permissionRefused,
   readAnswer,
   statusLine,
   summarizeCard,
@@ -52,12 +53,21 @@ async function findServer($: Engine): Promise<string | null> {
   return null
 }
 
+// Set when Claude Code's permissions refused the plugin's kiff_card read:
+// background reads stop for the session, so nobody is asked after every
+// call. /kiff still reads, since the person asked for it.
+let cardReadRefused = false
+
 /** Reads the Card through the gateway's read-only kiff_card tool. */
-async function refreshCard($: Engine) {
+async function refreshCard($: Engine, asked = false) {
+  if (cardReadRefused && !asked) return
   const name = await findServer($)
   if (!name) return
   const res = await $.mcp.call(name, CARD_TOOL, {})
-  if (res.isError) return
+  if (res.isError) {
+    if (permissionRefused(res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n'))) cardReadRefused = true
+    return
+  }
   const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
   const summary = summarizeCard(res.structuredContent) ?? summarizeCardText(text)
   if (summary) await update($, card, () => summary)
@@ -72,7 +82,7 @@ async function readCardAtStart($: Engine) {
     } catch {
       continue
     }
-    if (await read($, card)) break
+    if ((await read($, card)) || cardReadRefused) break
   }
   await showStatus($)
 }
@@ -89,7 +99,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'kiff' }, async $ => {
-    await refreshCard($).catch(() => {})
+    await refreshCard($, true).catch(() => {})
     await showStatus($)
     await $.ui.open({ id: PANE, title: 'KIFF' })
     const c = await read($, card)

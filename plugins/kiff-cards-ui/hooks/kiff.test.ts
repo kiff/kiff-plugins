@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { describeCall, heldToast, holdEnded, kiffTool, readAnswer, statusLine, summarizeCard, summarizeCardText, upsert } from './kiff'
+import { describeCall, permissionRefused, heldToast, holdEnded, kiffTool, readAnswer, statusLine, summarizeCard, summarizeCardText, upsert } from './kiff'
 
 // Texts as apps/gateway writes them (gateway.go heldResult, result.go).
 const HELD =
@@ -110,6 +110,13 @@ describe('live shapes (claude.ai connector, 2026-10-07)', () => {
   })
   test("a tool's own error is a tool error", () => {
     expect(readAnswer('Error: No customer with that id.', 'No customer with that id.', true)).toEqual({ state: 'tool_error' })
+  })
+})
+
+describe('permissions', () => {
+  test("tells Claude Code's permission refusal from KIFF's answers (live, 2026-10-07)", () => {
+    expect(permissionRefused("Claude requested permissions to use mcp__claude_ai_KIFF__kiff_card, but you haven't granted it yet.")).toBe(true)
+    expect(permissionRefused('KIFF could not read your Card just now. Calls are still checked when they are made; try again shortly.')).toBe(false)
   })
 })
 
