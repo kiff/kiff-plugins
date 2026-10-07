@@ -71,10 +71,19 @@ let cardReadError = ''
  * sign-in, the network). Names the exact tool in case it was a permission.
  */
 async function refusalText($: Engine): Promise<string> {
-  const name = await read($, server)
-  const tool = name ? `mcp__${name}__${CARD_TOOL}` : `the gateway's ${CARD_TOOL} tool`
+  const tool = await cardToolName($)
   const why = cardReadError ? ` (${cardReadError})` : ''
   return `KIFF Cards UI can't read your Card${why}. If Claude Code blocked it, type /kiff to be asked, or allow ${tool} in /permissions under User settings so it applies in every folder.`
+}
+
+/** The one-line notice: the action first, since a terminal cuts the line short. */
+async function refusalNotice($: Engine): Promise<string> {
+  return `KIFF Card not read. If Claude Code blocked it: /permissions → allow ${await cardToolName($)} (User settings). Details: /kiff`
+}
+
+async function cardToolName($: Engine): Promise<string> {
+  const name = await read($, server)
+  return name ? `mcp__${name}__${CARD_TOOL}` : `the gateway's ${CARD_TOOL} tool`
 }
 
 /** The first line of an error, short enough for a notice. */
@@ -144,7 +153,7 @@ async function refreshCard($: Engine, asked = false) {
       cardReadError = firstLine(errorText)
       if (!refusalShown) {
         refusalShown = true
-        $.ui.toast(await refusalText($), { timeoutMs: 15000 })
+        $.ui.toast(await refusalNotice($), { timeoutMs: 15000 })
       }
     }
     return
@@ -259,10 +268,12 @@ export const register: Register = on => {
     const list = [...(await read($, calls))].reverse()
     const now = await $.clock.now()
     const room = Math.max(1, Math.floor(((e.viewport?.rows ?? 24) - 5) / 2))
+    const why = !c && cardReadRefused ? await refusalText($) : ''
 
     return (
       <Box flexDirection="column">
         <Text bold>{c ? `Card: ${c.summary}` : 'Card: not read yet'}</Text>
+        {why !== '' && <Text color="warning">{why}</Text>}
         <Text dimColor>Calls are checked by KIFF when they are made. A person answers held calls in KIFF Cloud.</Text>
         {list.length === 0 && <Text dimColor>No KIFF calls in this session yet.</Text>}
         {list.slice(0, room).map(call => (

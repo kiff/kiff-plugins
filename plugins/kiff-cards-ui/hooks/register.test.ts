@@ -14,7 +14,10 @@ const CARD = {
   agent_id: 'agent_1',
   cards: [{ id: 'card_1', grants: [{ action: 'refund' }], limits: [{ quantity: 'sum(amount)', limit: 500, window: 'calendar_day', used: 180, remaining: 320, status: 'ok' }] }],
 }
-const PANE_PROPS = { title: 'KIFF', isFocused: false, bodyColumns: 80, bodyRows: 20 } as never
+// The one-line notice when the Card read fails: the action first.
+const NOTICE =
+  'KIFF Card not read. If Claude Code blocked it: /permissions → allow mcp__claude_ai_KIFF__kiff_card (User settings). Details: /kiff'
+const PANE_PROPS ={ title: 'KIFF', isFocused: false, bodyColumns: 80, bodyRows: 20 } as never
 
 /** Stands in for the engine and the KIFF gateway beneath the plugin. */
 function gateway(on: On, answer: (tool: string) => { text: string; isError: boolean; result?: unknown }) {
@@ -201,7 +204,7 @@ test('a blocked Card read is explained once, naming the exact tool, and /kiff sa
 
   const explained =
     "KIFF Cards UI can't read your Card (Denied by the auto mode classifier: classifier unavailable). If Claude Code blocked it, type /kiff to be asked, or allow mcp__claude_ai_KIFF__kiff_card in /permissions under User settings so it applies in every folder."
-  expect(toasts).toEqual([explained])
+  expect(toasts).toEqual([NOTICE])
   expect(JSON.stringify(answer)).toContain(explained)
 })
 
@@ -219,11 +222,11 @@ test('a connector or gateway error is shown as it is, without blaming permission
     value: { content: [{ type: 'text', text: 'Error: the claude.ai connector needs you to sign in again\nmore detail' }], isError: true },
   }))
   on('tool.call', () => ({ deny: 'not now' }))
-  await $.command.run({ command: 'kiff', args: '' } as never)
+  const answer = JSON.stringify(await $.command.run({ command: 'kiff', args: '' } as never))
 
-  expect(toasts).toHaveLength(1)
-  expect(toasts[0]).toContain("can't read your Card (the claude.ai connector needs you to sign in again).")
-  expect(toasts[0]).not.toContain('did not allow')
+  expect(toasts).toEqual([NOTICE])
+  expect(answer).toContain("can't read your Card (the claude.ai connector needs you to sign in again).")
+  expect(answer + toasts[0]).not.toContain('did not allow')
 })
 
 test('a deny rule that removes kiff_card is reported as blocked, not as no gateway (headless, 2026-10-07)', async ($, on) => {
@@ -240,9 +243,8 @@ test('a deny rule that removes kiff_card is reported as blocked, not as no gatew
   on('mcp.call', () => ({ deny: 'no connected MCP tool "kiff_card" on a server named "claude_ai_KIFF"' }))
   const answer = await $.command.run({ command: 'kiff', args: '' } as never)
 
-  expect(toasts).toEqual([
-    "KIFF Cards UI can't read your Card (kiff_card is not available in this session). If Claude Code blocked it, type /kiff to be asked, or allow mcp__claude_ai_KIFF__kiff_card in /permissions under User settings so it applies in every folder.",
-  ])
+  expect(toasts).toEqual([NOTICE])
+  expect(JSON.stringify(answer)).toContain("can't read your Card (kiff_card is not available in this session).")
   expect(JSON.stringify(answer)).not.toContain('No KIFF gateway')
 })
 
@@ -281,11 +283,11 @@ test('the thrown refusal is shown without the engine prefix (exact text from an 
   // The engine wraps a refusal as "HooksError: kiff-cards-ui: $.mcp.call(claude_ai_KIFF, kiff_card)
   // refused: <reason>", exactly as the interactive debug log showed.
   on('mcp.call', () => ({ deny: 'The server-side auto mode classifier gave no verdict for mcp__claude_ai_KIFF__kiff_card' }))
-  await $.command.run({ command: 'kiff', args: '' } as never)
+  const answer = JSON.stringify(await $.command.run({ command: 'kiff', args: '' } as never))
 
-  expect(toasts).toHaveLength(1)
-  expect(toasts[0]).toContain("can't read your Card (The server-side auto mode classifier gave no verdict")
-  expect(toasts[0]).not.toContain('HooksError')
+  expect(toasts).toEqual([NOTICE])
+  expect(answer).toContain("can't read your Card (The server-side auto mode classifier gave no verdict")
+  expect(answer).not.toContain('HooksError')
 })
 
 test('an auto mode block thrown during the probe still names the gateway and is explained (interactive, 2026-10-07)', async ($, on) => {
@@ -304,12 +306,12 @@ test('an auto mode block thrown during the probe still names the gateway and is 
       : { deny: `no connected MCP tool "kiff_card" on a server named "${e.server}"` },
   )
   on('tool.call', () => ({ deny: 'denied by auto mode' }))
-  const answer = await $.command.run({ command: 'kiff', args: '' } as never)
+  const answer = JSON.stringify(await $.command.run({ command: 'kiff', args: '' } as never))
 
-  expect(toasts).toHaveLength(1)
-  expect(toasts[0]).toContain('denied by auto mode')
-  expect(toasts[0]).toContain('allow mcp__claude_ai_KIFF__kiff_card in /permissions')
-  expect(JSON.stringify(answer)).not.toContain('No KIFF gateway')
+  expect(toasts).toEqual([NOTICE])
+  expect(answer).toContain('denied by auto mode')
+  expect(answer).toContain('allow mcp__claude_ai_KIFF__kiff_card in /permissions')
+  expect(answer).not.toContain('No KIFF gateway')
 })
 
 test('finds the gateway by name when its tools are deferred out of the tool list (seen interactively, 2026-10-07)', async ($, on) => {
