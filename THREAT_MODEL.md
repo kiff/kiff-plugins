@@ -20,6 +20,8 @@ not have.**
   rest.
 - The agent's gateway credential.
 - The connected tools' own credentials.
+- KIFF's execution-permit signing key, and, for a tool in `relay` mode, the
+  relay's transport credential KIFF holds.
 - The customer data that passes through tool calls.
 
 ## Trust boundaries
@@ -33,8 +35,12 @@ KIFF gateway, mcp.kiff.dev           (KIFF, hosted)
         │  allowed → forwarded · over the Card → held or refused
         ▼
 Connected tool                       (the company's remote MCP server)
-        │  KIFF calls it with the tool's own credential,
-        │  stored encrypted in KIFF; the agent never sees it
+        │  sealed: KIFF calls it with the tool's own credential,
+        │          stored encrypted in KIFF; the agent never sees it
+        │  verify: KIFF holds no credential; the tool checks a
+        │          permit KIFF signs for each allowed call
+        │  relay:  the company's relay checks the permit and adds
+        │          the key from its own vault
         ▼
 The system it changes                (payments, CRM, accounts…)
 
@@ -152,12 +158,33 @@ it.
 
 - If KIFF is unreachable, calls are refused, not forwarded. Nothing runs
   without a decision.
-- KIFF stores the connected tools' credentials encrypted (AES-256-GCM), bound
-  to the account and the tool. Tool addresses must be public HTTPS; internal
-  and metadata addresses are refused.
-- **Residual risk:** someone who controlled KIFF's servers could call the
-  tools the account connected. Connect tools with credentials scoped to what
-  agents need, not full-access ones.
+- Each connected tool has a custody mode, shown per tool in KIFF Cloud
+  ([Tools that check KIFF](https://kiff.dev/docs/tool-permits)):
+  - `sealed` (the default): KIFF stores the tool's credential encrypted
+    (AES-256-GCM), bound to the account and the tool.
+  - `verify`: KIFF holds no credential. For each allowed call it signs a
+    short-lived execution permit (Ed25519, 60 seconds) for that tool,
+    account and exact arguments; the tool checks it with KIFF's open
+    verifier, which runs each operation at most once using the tool's own
+    store.
+  - `relay`: the company's relay holds the key and checks the permit; KIFF
+    holds only the relay's transport credential, which runs nothing alone.
+- Tool addresses must be public HTTPS; internal and metadata addresses are
+  refused.
+- **Residual risk (sealed):** someone who controlled KIFF's servers could
+  call the tools the account connected with their stored credentials.
+  Connect tools with credentials scoped to what agents need, or use
+  `verify` or `relay` so KIFF holds none.
+- **Residual risk (verify, relay):** KIFF still decides. Someone holding
+  KIFF's permit signing key could authorize calls until verifiers stop
+  trusting it: within 5 minutes for a verifier that refetches KIFF's keys,
+  or up to 1 hour if it cannot reach them, after which it refuses every
+  permit; and, for one that pins them, until the company adds the key to
+  its distrust list or the pinned key's `not_after` passes. The verifier's own
+  limits (`policy=`) and its distrust list are the company's to set. Someone
+  who controlled the gateway could ask for calls within each connected
+  agent's Card, using that agent's key; each is still a Card decision with a
+  receipt.
 
 ### A connected tool fakes a KIFF notice in the display plugin
 
@@ -208,6 +235,11 @@ reviewer can ask us about (security@kiff.dev):
 | An OAuth connection ends, and its key is revoked, when it should | `TestRefreshRotatesAndReuseEndsTheGrant`, `TestReplayedCodeRevokesTheKey`, `TestGrantEnds`, `TestKeyIsMintedOnlyOnExchange` |
 | A connect link fixes the agent and stops when revoked or archived | `TestConnectLinkFixesTheAgent`, `TestConnectLinkOfAnotherAccount`, `TestRevokedLinkStopsEverything`, `TestArchivedAgentStopsItsLinks`, `TestLinkURLAcceptsOnlyItsOwnTokens` |
 | A device code only connects an agent, once | `TestDeviceFlowNewAgent`, `TestDeviceFlowThroughALink`, `TestDeviceFlowDenyAndExpiry` |
+| A `verify` or `relay` tool gets each allowed call with its permit, and a `verify` tool's credential is not kept | `TestVerifyModeSendsThePermitAndNoCredential`, `TestAllowedWithoutPermitIsNotSent`, `TestCustodyModeMoves` |
+| One permit per operation, bound to its exact arguments, including a held call's release | `TestPermit_AllowedCallGetsItsOnePermit`, `TestPermit_ReusedOperationWithOtherArgumentsIsRefused`, `TestPermit_HeldCallReleasedWithOtherArgumentsGetsNoPermit` |
+
+The permit verifier a tool or relay runs is open source, with its tests:
+[`kiff_guard.permit`](https://github.com/kiff/kiff-guard) (`tests/test_permit_verifier.py`).
 
 ## Reporting
 
