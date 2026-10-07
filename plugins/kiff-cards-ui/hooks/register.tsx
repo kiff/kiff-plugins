@@ -44,8 +44,10 @@ async function noteServer($: Engine, name: string) {
 async function findServer($: Engine): Promise<string | null> {
   const known = await read($, server)
   if (known) return known
+  // Any of the gateway's tools names its server; kiff_card may be missing
+  // when a deny rule removed it, which callCard then reports as blocked.
   for (const t of await $.tool.list()) {
-    if (t.mcp && kiffTool(t.name)?.tool === CARD_TOOL) {
+    if (t.mcp && kiffTool(t.name)) {
       await noteServer($, t.name)
       return kiffTool(t.name)!.server
     }
@@ -58,6 +60,15 @@ async function findServer($: Engine): Promise<string | null> {
 // reads, since the person asked for it, and a read that succeeds (the
 // person allowed kiff_card meanwhile) turns background reads back on.
 let cardReadRefused = false
+// The refusal is explained once per session, in a notice and in /kiff.
+let refusalShown = false
+
+/** What to do when Claude Code blocks the Card read, naming the exact tool. */
+async function refusalText($: Engine): Promise<string> {
+  const name = await read($, server)
+  const tool = name ? `mcp__${name}__${CARD_TOOL}` : `the gateway's ${CARD_TOOL} tool`
+  return `KIFF Cards UI can't read your Card: Claude Code did not allow ${tool}. Allow it in /permissions, then type /kiff.`
+}
 
 // The gateway's server names, in the tool-name spelling $.mcp.call takes:
 // this repo's kiff-cards plugin, a connect link added as "kiff", and the
@@ -68,7 +79,18 @@ const KNOWN_SERVERS = ['plugin_kiff-cards_kiff', 'kiff', 'claude_ai_KIFF']
 /** Calls kiff_card on the gateway: the one already found, or the first known name that answers. */
 async function callCard($: Engine): Promise<McpToolResult | null> {
   const name = await findServer($)
-  if (name) return $.mcp.call(name, CARD_TOOL, {})
+  if (name) {
+    try {
+      return await $.mcp.call(name, CARD_TOOL, {})
+    } catch (err) {
+      // Listed but not answering: the connector is still connecting, so let
+      // the caller try again later.
+      if ((await $.tool.list()).some(t => t.name === `mcp__${name}__${CARD_TOOL}`)) throw err
+      // The gateway always serves kiff_card (the name is reserved), so on a
+      // server we know it is missing only when Claude Code removed it.
+      return { content: [{ type: 'text', text: `${CARD_TOOL} is not available in this session` }], isError: true }
+    }
+  }
   for (const candidate of KNOWN_SERVERS) {
     let res: McpToolResult
     try {
@@ -88,7 +110,13 @@ async function refreshCard($: Engine, asked = false) {
   const res = await callCard($)
   if (!res) return
   if (res.isError) {
-    if (permissionRefused(res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n'))) cardReadRefused = true
+    if (permissionRefused(res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n'))) {
+      cardReadRefused = true
+      if (!refusalShown) {
+        refusalShown = true
+        $.ui.toast(await refusalText($), { timeoutMs: 15000 })
+      }
+    }
     return
   }
   cardReadRefused = false
@@ -127,7 +155,10 @@ export const register: Register = on => {
     await showStatus($)
     await $.ui.open({ id: PANE, title: 'KIFF' })
     const c = await read($, card)
-    return { text: c ? `KIFF Card: ${c.summary}.` : 'KIFF pane opened. No KIFF gateway seen in this session yet.' }
+    if (c) return { text: `KIFF Card: ${c.summary}.` }
+    if (cardReadRefused) return { text: await refusalText($) }
+    if (await read($, server)) return { text: 'KIFF pane opened. KIFF could not read the Card just now; it is read again after the next KIFF call.' }
+    return { text: 'KIFF pane opened. No KIFF gateway seen in this session yet.' }
   })
 
   on('tool.call', async ($, e, next) => {

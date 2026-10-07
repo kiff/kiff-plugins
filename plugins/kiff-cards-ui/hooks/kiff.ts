@@ -215,12 +215,13 @@ export function summarizeCardText(text: string | undefined): KiffCard | undefine
 }
 
 /**
- * True when Claude Code's permissions, not KIFF, refused a call. Matched on
- * Claude Code's English wording (seen live with 2.1.292); if that wording
- * changes, the plugin only keeps asking, it never shows a wrong answer.
+ * True when Claude Code, not KIFF, refused a kiff_card read: its permission
+ * prompt, a deny rule, or the auto mode classifier, each worded differently.
+ * The gateway's kiff_card has one error of its own (card.go), so any other
+ * error result is Claude Code's.
  */
 export function permissionRefused(text: string): boolean {
-  return /requested permissions to use .+, but you haven't granted it yet/.test(text)
+  return !text.replace(/^Error: /, '').startsWith('KIFF could not read your Card')
 }
 
 /** The status line: the Card, then how many calls wait for a person. */

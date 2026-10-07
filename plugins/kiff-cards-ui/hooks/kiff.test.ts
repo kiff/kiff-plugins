@@ -117,6 +117,11 @@ describe('permissions', () => {
   test("tells Claude Code's permission refusal from KIFF's answers (live, 2026-10-07)", () => {
     expect(permissionRefused("Claude requested permissions to use mcp__claude_ai_KIFF__kiff_card, but you haven't granted it yet.")).toBe(true)
     expect(permissionRefused('KIFF could not read your Card just now. Calls are still checked when they are made; try again shortly.')).toBe(false)
+    expect(permissionRefused('Error: KIFF could not read your Card just now.')).toBe(false)
+  })
+  test('any other wording is Claude Code too, such as the auto mode classifier (interactive, 2026-10-07)', () => {
+    expect(permissionRefused('Denied by the auto mode classifier: classifier unavailable')).toBe(true)
+    expect(permissionRefused('Permission to use mcp__kiff__kiff_card has been denied.')).toBe(true)
   })
 })
 

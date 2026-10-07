@@ -180,6 +180,53 @@ test('after permission is granted, /kiff reads the Card and background reads res
   expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
 })
 
+test('a blocked Card read is explained once, naming the exact tool, and /kiff says the same (interactive, 2026-10-07)', async ($, on) => {
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: NOW }))
+  on('ui.open', () => ({ value: {} }) as never)
+  on('tool.list', () => ({ value: [] }))
+  on('mcp.call', (_$, e) => {
+    if (e.server !== 'claude_ai_KIFF') throw new Error('no such server')
+    return { value: { content: [{ type: 'text', text: 'Denied by the auto mode classifier: classifier unavailable' }], isError: true } }
+  })
+  on('tool.call', () => ({ result: { content: [] }, text: 'ok', isError: false }) as never)
+  await $.tool.call({ tool: 'mcp__claude_ai_KIFF__get_orders', customer_id: 'cus_1' })
+  const answer = await $.command.run({ command: 'kiff', args: '' } as never)
+  await $.command.run({ command: 'kiff', args: '' } as never)
+
+  const explained =
+    "KIFF Cards UI can't read your Card: Claude Code did not allow mcp__claude_ai_KIFF__kiff_card. Allow it in /permissions, then type /kiff."
+  expect(toasts).toEqual([explained])
+  expect(JSON.stringify(answer)).toContain(explained)
+})
+
+test('a deny rule that removes kiff_card is reported as blocked, not as no gateway (headless, 2026-10-07)', async ($, on) => {
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: NOW }))
+  on('ui.open', () => ({ value: {} }) as never)
+  // The other KIFF tools are listed; kiff_card was removed by the deny rule.
+  on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__get_orders', description: 'Orders', mcp: true }] }))
+  on('mcp.call', () => {
+    throw new Error('no connected MCP tool "kiff_card" on a server named "claude_ai_KIFF"')
+  })
+  const answer = await $.command.run({ command: 'kiff', args: '' } as never)
+
+  expect(toasts).toEqual([
+    "KIFF Cards UI can't read your Card: Claude Code did not allow mcp__claude_ai_KIFF__kiff_card. Allow it in /permissions, then type /kiff.",
+  ])
+  expect(JSON.stringify(answer)).not.toContain('No KIFF gateway')
+})
+
 test('finds the gateway by name when its tools are deferred out of the tool list (seen interactively, 2026-10-07)', async ($, on) => {
   const status: (string | undefined)[] = []
   const tried: string[] = []
