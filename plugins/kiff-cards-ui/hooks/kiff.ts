@@ -215,10 +215,12 @@ export function summarizeCardText(text: string | undefined): KiffCard | undefine
 }
 
 /**
- * True when Claude Code, not KIFF, refused a kiff_card read: its permission
- * prompt, a deny rule, or the auto mode classifier, each worded differently.
- * The gateway's kiff_card has one error of its own (card.go), so any other
- * error result is Claude Code's.
+ * True when a failed kiff_card read should stop background reads: any error
+ * except KIFF's own "could not read your Card", which is transient and
+ * retried. That covers Claude Code's refusals (its permission prompt, a deny
+ * rule, the auto mode classifier, each worded differently), but also the
+ * gateway failing to read the account's tools (card.go) and connector
+ * errors. So the explanation shown never claims the cause.
  */
 export function permissionRefused(text: string): boolean {
   return !text.replace(/^Error: /, '').startsWith('KIFF could not read your Card')

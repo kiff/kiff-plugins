@@ -200,9 +200,30 @@ test('a blocked Card read is explained once, naming the exact tool, and /kiff sa
   await $.command.run({ command: 'kiff', args: '' } as never)
 
   const explained =
-    "KIFF Cards UI can't read your Card: Claude Code did not allow mcp__claude_ai_KIFF__kiff_card. Type /kiff to be asked, or allow it in /permissions under User settings so it applies in every folder."
+    "KIFF Cards UI can't read your Card (Denied by the auto mode classifier: classifier unavailable). If Claude Code blocked it, type /kiff to be asked, or allow mcp__claude_ai_KIFF__kiff_card in /permissions under User settings so it applies in every folder."
   expect(toasts).toEqual([explained])
   expect(JSON.stringify(answer)).toContain(explained)
+})
+
+test('a connector or gateway error is shown as it is, without blaming permissions (review on e46b68b)', async ($, on) => {
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: NOW }))
+  on('ui.open', () => ({ value: {} }) as never)
+  on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
+  on('mcp.call', () => ({
+    value: { content: [{ type: 'text', text: 'Error: the claude.ai connector needs you to sign in again\nmore detail' }], isError: true },
+  }))
+  on('tool.call', () => ({ deny: 'not now' }))
+  await $.command.run({ command: 'kiff', args: '' } as never)
+
+  expect(toasts).toHaveLength(1)
+  expect(toasts[0]).toContain("can't read your Card (the claude.ai connector needs you to sign in again).")
+  expect(toasts[0]).not.toContain('did not allow')
 })
 
 test('a deny rule that removes kiff_card is reported as blocked, not as no gateway (headless, 2026-10-07)', async ($, on) => {
@@ -222,7 +243,7 @@ test('a deny rule that removes kiff_card is reported as blocked, not as no gatew
   const answer = await $.command.run({ command: 'kiff', args: '' } as never)
 
   expect(toasts).toEqual([
-    "KIFF Cards UI can't read your Card: Claude Code did not allow mcp__claude_ai_KIFF__kiff_card. Type /kiff to be asked, or allow it in /permissions under User settings so it applies in every folder.",
+    "KIFF Cards UI can't read your Card (kiff_card is not available in this session). If Claude Code blocked it, type /kiff to be asked, or allow mcp__claude_ai_KIFF__kiff_card in /permissions under User settings so it applies in every folder.",
   ])
   expect(JSON.stringify(answer)).not.toContain('No KIFF gateway')
 })

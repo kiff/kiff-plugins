@@ -55,19 +55,32 @@ async function findServer($: Engine): Promise<string | null> {
   return null
 }
 
-// Set when Claude Code's permissions refused the plugin's kiff_card read:
-// background reads stop, so nobody is asked after every call. /kiff still
-// reads, since the person asked for it, and a read that succeeds (the
-// person allowed kiff_card meanwhile) turns background reads back on.
+// Set when a kiff_card read failed with anything but KIFF's own "could not
+// read" message (see permissionRefused): background reads stop, so nobody
+// is asked after every call. /kiff still reads, since the person asked for
+// it, and a read that succeeds turns background reads back on.
 let cardReadRefused = false
-// The refusal is explained once per session, in a notice and in /kiff.
+// The failure is explained once per session, in a notice and in /kiff.
 let refusalShown = false
+// The first line of the failed read's error, shown in the explanation.
+let cardReadError = ''
 
-/** What to do when Claude Code blocks the Card read, naming the exact tool. */
+/**
+ * Why the Card could not be read, without claiming a cause: the error may be
+ * Claude Code's permissions, the gateway, or the connector (an expired
+ * sign-in, the network). Names the exact tool in case it was a permission.
+ */
 async function refusalText($: Engine): Promise<string> {
   const name = await read($, server)
   const tool = name ? `mcp__${name}__${CARD_TOOL}` : `the gateway's ${CARD_TOOL} tool`
-  return `KIFF Cards UI can't read your Card: Claude Code did not allow ${tool}. Type /kiff to be asked, or allow it in /permissions under User settings so it applies in every folder.`
+  const why = cardReadError ? ` (${cardReadError})` : ''
+  return `KIFF Cards UI can't read your Card${why}. If Claude Code blocked it, type /kiff to be asked, or allow ${tool} in /permissions under User settings so it applies in every folder.`
+}
+
+/** The first line of an error, short enough for a notice. */
+function firstLine(text: string): string {
+  const line = text.replace(/^Error: /, '').split('\n')[0]!.trim()
+  return line.length > 120 ? `${line.slice(0, 117)}...` : line
 }
 
 // The gateway's server names, in the tool-name spelling $.mcp.call takes:
@@ -110,8 +123,10 @@ async function refreshCard($: Engine, asked = false) {
   const res = await callCard($)
   if (!res) return
   if (res.isError) {
-    if (permissionRefused(res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n'))) {
+    const errorText = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
+    if (permissionRefused(errorText)) {
       cardReadRefused = true
+      cardReadError = firstLine(errorText)
       if (!refusalShown) {
         refusalShown = true
         $.ui.toast(await refusalText($), { timeoutMs: 15000 })
