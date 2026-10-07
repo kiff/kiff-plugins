@@ -20,6 +20,8 @@ not have.**
   rest.
 - The agent's gateway credential.
 - The connected tools' own credentials.
+- KIFF's execution-permit signing key, and, for a tool in `relay` mode, the
+  relay's transport credential KIFF holds.
 - The customer data that passes through tool calls.
 
 ## Trust boundaries
@@ -162,8 +164,9 @@ it.
     (AES-256-GCM), bound to the account and the tool.
   - `verify`: KIFF holds no credential. For each allowed call it signs a
     short-lived execution permit (Ed25519, 60 seconds) for that tool,
-    account and exact arguments; the tool checks it, and runs each operation
-    at most once.
+    account and exact arguments; the tool checks it with KIFF's open
+    verifier, which runs each operation at most once using the tool's own
+    store.
   - `relay`: the company's relay holds the key and checks the permit; KIFF
     holds only the relay's transport credential, which runs nothing alone.
 - Tool addresses must be public HTTPS; internal and metadata addresses are
@@ -175,7 +178,9 @@ it.
 - **Residual risk (verify, relay):** KIFF still decides. Someone holding
   KIFF's permit signing key could authorize calls until verifiers stop
   trusting it: within 5 minutes for a verifier that refetches KIFF's keys,
-  and until the company acts for one that pins them. The verifier's own
+  or up to 1 hour if it cannot reach them, after which it refuses every
+  permit; and, for one that pins them, until the company adds the key to
+  its distrust list or the pinned key's `not_after` passes. The verifier's own
   limits (`policy=`) and its distrust list are the company's to set. Someone
   who controlled the gateway could ask for calls within each connected
   agent's Card, using that agent's key; each is still a Card decision with a
