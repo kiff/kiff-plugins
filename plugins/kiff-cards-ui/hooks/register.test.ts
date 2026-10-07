@@ -17,7 +17,7 @@ const CARD = {
 // The one-line notice when the Card read fails: the action first.
 const NOTICE =
   'KIFF Card not read. If Claude Code blocked it, add the rule mcp__claude_ai_KIFF__kiff_card in /permissions → Allow (User settings). Details: /kiff'
-const PANE_PROPS ={ title: 'KIFF', isFocused: false, bodyColumns: 80, bodyRows: 20 } as never
+const PANE_PROPS = { title: 'KIFF', isFocused: false, bodyColumns: 80, bodyRows: 20 } as never
 
 /** Stands in for the engine and the KIFF gateway beneath the plugin. */
 function gateway(on: On, answer: (tool: string) => { text: string; isError: boolean; result?: unknown }) {

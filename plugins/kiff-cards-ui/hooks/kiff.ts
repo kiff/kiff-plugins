@@ -231,7 +231,8 @@ export function summarizeCardText(text: string | undefined): KiffCard | undefine
   if (!text.startsWith('You act as agent ')) return undefined
   if (text.includes('No Card of yours applies here')) return { summary: 'no Card issued', issued: false }
   let best: { remaining: number; limit: number; line: string } | undefined
-  for (const m of text.matchAll(/(\d+) of (\d+) (\S+) left (today|in the last hour|in the last 24 hours|in this window)/g)) {
+  // Totals may be decimals once the Card has a unit: "38.00 of 50.00 EUR left today".
+  for (const m of text.matchAll(/(\d+(?:\.\d+)?) of (\d+(?:\.\d+)?) (\S+) left (today|in the last hour|in the last 24 hours|in this window)/g)) {
     const remaining = Number(m[1]), limit = Number(m[2])
     if (limit > 0 && (!best || remaining / limit < best.remaining / best.limit)) best = { remaining, limit, line: m[0] }
   }

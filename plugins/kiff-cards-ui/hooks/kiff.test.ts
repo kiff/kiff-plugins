@@ -217,6 +217,17 @@ describe('the Card', () => {
     expect(summarizeCardText(live)).toEqual({ summary: '99 of 100 calls left today', issued: true })
     expect(summarizeCardText('{not json')).toBeUndefined()
   })
+  test("reads the gateway's decimal totals once the Card has a unit (kiff-cloud #1054)", () => {
+    const alone =
+      'You act as agent a.\n- issue_refund: Card c covers this tool: up to 10.00 EUR per call; 38.00 of 50.00 EUR left today. A call over it is held for a person to approve.'
+    expect(summarizeCardText(alone)).toEqual({ summary: '38.00 of 50.00 EUR left today', issued: true })
+    const withLooserCount =
+      'You act as agent a.\n- issue_refund: Card c covers this tool: 38.00 of 50.00 EUR left today; ' +
+      '98 of 100 calls left today, shared by every tool this Card covers. A call over it is held for a person to approve.'
+    expect(summarizeCardText(withLooserCount)).toEqual({ summary: '38.00 of 50.00 EUR left today', issued: true })
+    const integers = 'You act as agent a.\n- refund: Card c covers this tool: 3800 of 5000 amount_eur left today; 98 of 100 calls left today.'
+    expect(summarizeCardText(integers)).toEqual({ summary: '3800 of 5000 amount_eur left today', issued: true })
+  })
   test('is not fooled by other results', () => {
     expect(summarizeCard('text')).toBeUndefined()
     expect(summarizeCard({ content: [] })).toBeUndefined()
