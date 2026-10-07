@@ -149,17 +149,21 @@ agent's own retry of the same call gets their answer. If it fails, calls go
 on as they would without it: the gateway enforces the Card either way.
 
 The status line reads the Card with the gateway's read-only `kiff_card`
-tool, which Claude Code's permissions cover like any other tool. Allow it
-once with `/permissions`, under the name that matches how the gateway is
-connected:
+tool, which Claude Code's permissions cover like any other tool. A plugin
+cannot grant itself a permission, so allow it once:
 
-- `mcp__plugin_kiff-cards_kiff__kiff_card` (this repo's `kiff-cards` plugin)
-- `mcp__kiff__kiff_card` (a connect link added as `kiff`)
-- `mcp__claude_ai_KIFF__kiff_card` (the claude.ai KIFF connector)
+- **The easy way:** type `/kiff`. If the Card could not be read, Claude
+  Code asks whether to allow `kiff_card`; choose to always allow it.
+- **Or by hand:** `/permissions` → **Allow** → add the name that matches
+  how the gateway is connected, and save it under **User settings** so it
+  applies in every folder (saved for a project, it only applies there):
+  - `mcp__plugin_kiff-cards_kiff__kiff_card` (this repo's `kiff-cards` plugin)
+  - `mcp__kiff__kiff_card` (a connect link added as `kiff`)
+  - `mcp__claude_ai_KIFF__kiff_card` (the claude.ai KIFF connector)
 
-If it is not allowed, the plugin stops reading in the background instead
-of asking after every call. `/kiff` still reads it, and once it is
-allowed, background reads start again.
+Until it is allowed, the plugin says so once and stops reading in the
+background, instead of asking after every call. Once it is allowed,
+background reads start again.
 
 The amount it shows is a guess: the first argument whose name contains
 "amount". Links in a notice or the pane open only `https://app.kiff.dev`.

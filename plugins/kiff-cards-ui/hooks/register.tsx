@@ -67,7 +67,7 @@ let refusalShown = false
 async function refusalText($: Engine): Promise<string> {
   const name = await read($, server)
   const tool = name ? `mcp__${name}__${CARD_TOOL}` : `the gateway's ${CARD_TOOL} tool`
-  return `KIFF Cards UI can't read your Card: Claude Code did not allow ${tool}. Allow it in /permissions, then type /kiff.`
+  return `KIFF Cards UI can't read your Card: Claude Code did not allow ${tool}. Type /kiff to be asked, or allow it in /permissions under User settings so it applies in every folder.`
 }
 
 // The gateway's server names, in the tool-name spelling $.mcp.call takes:
@@ -125,6 +125,25 @@ async function refreshCard($: Engine, asked = false) {
   if (summary) await update($, card, () => summary)
 }
 
+/**
+ * Reads the Card through Claude Code's normal tool path, which shows its
+ * permission prompt. Only for /kiff: the person asked, and says so.
+ */
+async function askForCard($: Engine) {
+  const name = await read($, server)
+  if (!name) return
+  const ran = await $.tool.call({
+    tool: `mcp__${name}__${CARD_TOOL}`,
+    consent: 'The user typed /kiff to see their KIFF Card.',
+  })
+  if (ran.deny !== undefined || ran.isError) return
+  const structured = (ran.result as { structuredContent?: unknown } | undefined)?.structuredContent
+  const summary = summarizeCard(structured) ?? summarizeCardText(ran.text)
+  if (!summary) return
+  cardReadRefused = false
+  await update($, card, () => summary)
+}
+
 /** Reads the Card once the gateway has connected: a few tries, 5 s apart. */
 async function readCardAtStart($: Engine) {
   for (let i = 0; i < 4; i++) {
@@ -152,6 +171,10 @@ export const register: Register = on => {
 
   on('command.run', { command: 'kiff' }, async $ => {
     await refreshCard($, true).catch(() => {})
+    // The quiet read above cannot ask. When Claude Code refused it, read
+    // again the way the model does, so the person typing /kiff gets Claude
+    // Code's own permission prompt instead of a trip to /permissions.
+    if (cardReadRefused && !(await read($, card))) await askForCard($).catch(() => {})
     await showStatus($)
     await $.ui.open({ id: PANE, title: 'KIFF' })
     const c = await read($, card)

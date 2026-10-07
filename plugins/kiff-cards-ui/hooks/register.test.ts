@@ -200,7 +200,7 @@ test('a blocked Card read is explained once, naming the exact tool, and /kiff sa
   await $.command.run({ command: 'kiff', args: '' } as never)
 
   const explained =
-    "KIFF Cards UI can't read your Card: Claude Code did not allow mcp__claude_ai_KIFF__kiff_card. Allow it in /permissions, then type /kiff."
+    "KIFF Cards UI can't read your Card: Claude Code did not allow mcp__claude_ai_KIFF__kiff_card. Type /kiff to be asked, or allow it in /permissions under User settings so it applies in every folder."
   expect(toasts).toEqual([explained])
   expect(JSON.stringify(answer)).toContain(explained)
 })
@@ -222,9 +222,30 @@ test('a deny rule that removes kiff_card is reported as blocked, not as no gatew
   const answer = await $.command.run({ command: 'kiff', args: '' } as never)
 
   expect(toasts).toEqual([
-    "KIFF Cards UI can't read your Card: Claude Code did not allow mcp__claude_ai_KIFF__kiff_card. Allow it in /permissions, then type /kiff.",
+    "KIFF Cards UI can't read your Card: Claude Code did not allow mcp__claude_ai_KIFF__kiff_card. Type /kiff to be asked, or allow it in /permissions under User settings so it applies in every folder.",
   ])
   expect(JSON.stringify(answer)).not.toContain('No KIFF gateway')
+})
+
+test('/kiff asks through Claude Code\'s own permission path when the quiet read was refused', async ($, on) => {
+  const consents: unknown[] = []
+  on('ui.toast', () => ({ value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: NOW }))
+  on('ui.open', () => ({ value: {} }) as never)
+  on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
+  on('mcp.call', () => ({
+    value: { content: [{ type: 'text', text: "Claude requested permissions to use mcp__claude_ai_KIFF__kiff_card, but you haven't granted it yet." }], isError: true },
+  }))
+  // Stands for Claude Code's permission prompt, answered "Allow".
+  on('tool.call', (_$, e) => {
+    consents.push((e as Record<string, unknown>).consent)
+    return { result: JSON.stringify(CARD), text: JSON.stringify(CARD), isError: false } as never
+  })
+  const answer = await $.command.run({ command: 'kiff', args: '' } as never)
+
+  expect(consents).toEqual(['The user typed /kiff to see their KIFF Card.'])
+  expect(JSON.stringify(answer)).toContain('KIFF Card: 320 of 500 amount left today.')
 })
 
 test('finds the gateway by name when its tools are deferred out of the tool list (seen interactively, 2026-10-07)', async ($, on) => {
