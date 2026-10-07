@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
@@ -107,4 +107,28 @@ test('leaves other tools alone', async ($, on) => {
   expect(seen.toasts).toEqual([])
   expect(seen.status).toBeUndefined()
   expect(seen.calls).toEqual([])
+})
+
+test('at session start, the Card is read once the gateway has connected', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  const status: (string | undefined)[] = []
+  let tries = 0
+  on('ui.status', (_$, e) => {
+    status.push(e.text)
+    return { value: undefined }
+  })
+  on('command.register', () => ({ value: undefined }) as never)
+  on('session.start', () => ({ cwd: '/' }) as never)
+  on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
+  on('mcp.call', () => {
+    tries++
+    if (tries === 1) throw new Error('no connected MCP tool "kiff_card" on a server named "claude_ai_KIFF"')
+    // As the claude.ai connector sends it: the Card's JSON as text.
+    return { value: { content: [{ type: 'text', text: JSON.stringify(CARD) }], isError: false } }
+  })
+  await $.session.start({ cwd: '/' } as never)
+  await clock.advance(5000)
+  await clock.advance(0)
+  expect(tries).toBe(2)
+  expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
 })
