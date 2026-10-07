@@ -73,12 +73,12 @@ let cardReadError = ''
 async function refusalText($: Engine): Promise<string> {
   const tool = await cardToolName($)
   const why = cardReadError ? ` (${cardReadError})` : ''
-  return `KIFF Cards UI can't read your Card${why}. If Claude Code blocked it, type /kiff to be asked, or allow ${tool} in /permissions under User settings so it applies in every folder.`
+  return `KIFF Cards UI can't read your Card${why}. If Claude Code blocked it, type /kiff to be asked, or in /permissions → Allow, add the rule ${tool} (just that name), saved under User settings so it applies in every folder.`
 }
 
 /** The one-line notice: the action first, since a terminal cuts the line short. */
 async function refusalNotice($: Engine): Promise<string> {
-  return `KIFF Card not read. If Claude Code blocked it: /permissions → allow ${await cardToolName($)} (User settings). Details: /kiff`
+  return `KIFF Card not read. If Claude Code blocked it, add the rule ${await cardToolName($)} in /permissions → Allow (User settings). Details: /kiff`
 }
 
 async function cardToolName($: Engine): Promise<string> {

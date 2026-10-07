@@ -153,10 +153,12 @@ tool, which Claude Code's permissions cover like any other tool. A plugin
 cannot grant itself a permission, so allow it once:
 
 - **The easy way:** type `/kiff`. If the Card could not be read, Claude
-  Code asks whether to allow `kiff_card`; choose to always allow it.
-- **Or by hand:** `/permissions` → **Allow** → add the name that matches
-  how the gateway is connected, and save it under **User settings** so it
-  applies in every folder (saved for a project, it only applies there):
+  Code asks whether to allow `kiff_card`; choose to always allow it. In
+  auto mode Claude Code decides without asking, so use the rule below.
+- **Or by hand:** `/permissions` → **Allow** → add a rule that is just the
+  tool's name (no "allow" in front), the one that matches how the gateway
+  is connected, and save it under **User settings** so it applies in every
+  folder (saved for a project, it only applies there):
   - `mcp__plugin_kiff-cards_kiff__kiff_card` (this repo's `kiff-cards` plugin)
   - `mcp__kiff__kiff_card` (a connect link added as `kiff`)
   - `mcp__claude_ai_KIFF__kiff_card` (the claude.ai KIFF connector)

@@ -16,7 +16,7 @@ const CARD = {
 }
 // The one-line notice when the Card read fails: the action first.
 const NOTICE =
-  'KIFF Card not read. If Claude Code blocked it: /permissions → allow mcp__claude_ai_KIFF__kiff_card (User settings). Details: /kiff'
+  'KIFF Card not read. If Claude Code blocked it, add the rule mcp__claude_ai_KIFF__kiff_card in /permissions → Allow (User settings). Details: /kiff'
 const PANE_PROPS ={ title: 'KIFF', isFocused: false, bodyColumns: 80, bodyRows: 20 } as never
 
 /** Stands in for the engine and the KIFF gateway beneath the plugin. */
@@ -203,7 +203,7 @@ test('a blocked Card read is explained once, naming the exact tool, and /kiff sa
   await $.command.run({ command: 'kiff', args: '' } as never)
 
   const explained =
-    "KIFF Cards UI can't read your Card (Denied by the auto mode classifier: classifier unavailable). If Claude Code blocked it, type /kiff to be asked, or allow mcp__claude_ai_KIFF__kiff_card in /permissions under User settings so it applies in every folder."
+    "KIFF Cards UI can't read your Card (Denied by the auto mode classifier: classifier unavailable). If Claude Code blocked it, type /kiff to be asked, or in /permissions → Allow, add the rule mcp__claude_ai_KIFF__kiff_card (just that name), saved under User settings so it applies in every folder."
   expect(toasts).toEqual([NOTICE])
   expect(JSON.stringify(answer)).toContain(explained)
 })
@@ -310,7 +310,7 @@ test('an auto mode block thrown during the probe still names the gateway and is 
 
   expect(toasts).toEqual([NOTICE])
   expect(answer).toContain('denied by auto mode')
-  expect(answer).toContain('allow mcp__claude_ai_KIFF__kiff_card in /permissions')
+  expect(answer).toContain('add the rule mcp__claude_ai_KIFF__kiff_card (just that name)')
   expect(answer).not.toContain('No KIFF gateway')
 })
 
