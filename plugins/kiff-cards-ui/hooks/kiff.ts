@@ -157,7 +157,18 @@ export function upsert(calls: readonly KiffCall[], call: KiffCall, max = 50): Ki
   return [...calls.filter(c => c.key !== call.key), call].slice(-max)
 }
 
-type CardLimit = { quantity?: string; limit?: number; window?: string; used?: number; remaining?: number; status?: string }
+type CardLimit = {
+  quantity?: string
+  limit?: number
+  window?: string
+  used?: number
+  remaining?: number
+  status?: string
+  // What a summed amount means, when the domain declares it (kiff-cloud #1053):
+  // unit EUR with scale 2 makes 8000 read as 80.00 EUR.
+  unit?: string
+  scale?: number
+}
 type AgentCard = { agent_id?: string; cards?: { id?: string; limits?: CardLimit[]; grants?: unknown[] }[] }
 
 const WINDOWS: Record<string, string> = {
@@ -184,9 +195,22 @@ export function summarizeCard(structured: unknown): KiffCard | undefined {
   }
   if (!tightest) return { summary: 'Card active', issued: true }
   const arg = /^sum\((.+)\)$/.exec(tightest.quantity ?? '')?.[1]
-  const unit = arg ?? 'calls'
   const window = WINDOWS[tightest.window ?? ''] ?? 'in this window'
+  if (arg && tightest.unit) {
+    const scale = tightest.scale ?? 0
+    const amount = (n: number) => formatScaled(n, scale)
+    return { summary: `${amount(tightest.remaining!)} of ${amount(tightest.limit!)} ${tightest.unit} left ${window}`, issued: true }
+  }
+  const unit = arg ?? 'calls'
   return { summary: `${tightest.remaining} of ${tightest.limit} ${unit} left ${window}`, issued: true }
+}
+
+/** Writes n with scale decimal places: 8000, 2 -> "80.00". */
+export function formatScaled(n: number, scale: number): string {
+  if (!Number.isInteger(scale) || scale <= 0) return String(n)
+  const sign = n < 0 ? '-' : ''
+  const digits = String(Math.abs(n)).padStart(scale + 1, '0')
+  return `${sign}${digits.slice(0, -scale)}.${digits.slice(-scale)}`
 }
 
 /**

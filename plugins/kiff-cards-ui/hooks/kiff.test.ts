@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { describeCall, permissionRefused, heldToast, holdEnded, kiffTool, readAnswer, statusLine, summarizeCard, summarizeCardText, upsert } from './kiff'
+import { describeCall, formatScaled, permissionRefused, heldToast, holdEnded, kiffTool, readAnswer, statusLine, summarizeCard, summarizeCardText, upsert } from './kiff'
 
 // Texts as apps/gateway writes them (gateway.go heldResult, result.go).
 const HELD =
@@ -177,6 +177,18 @@ describe('the Card', () => {
   }
   test('shows the total with the least left', () => {
     expect(summarizeCard(card)).toEqual({ summary: '320 of 500 amount left today', issued: true })
+  })
+  test('reads an amount in its unit when the Card says it (kiff-cloud #1053)', () => {
+    const euros = { cards: [{ limits: [{ quantity: 'sum(amount_cents)', limit: 5000, window: 'calendar_day', used: 1200, remaining: 3800, status: 'ok', unit: 'EUR', scale: 2 }] }] }
+    expect(summarizeCard(euros)).toEqual({ summary: '38.00 of 50.00 EUR left today', issued: true })
+    const points = { cards: [{ limits: [{ quantity: 'sum(points)', limit: 500, window: 'calendar_day', used: 180, remaining: 320, status: 'ok', unit: 'points' }] }] }
+    expect(summarizeCard(points)).toEqual({ summary: '320 of 500 points left today', issued: true })
+  })
+  test('formatScaled keeps leading zeros and signs', () => {
+    expect(formatScaled(8000, 2)).toBe('80.00')
+    expect(formatScaled(5, 2)).toBe('0.05')
+    expect(formatScaled(-5, 2)).toBe('-0.05')
+    expect(formatScaled(123, 0)).toBe('123')
   })
   test('says when no Card applies', () => {
     expect(summarizeCard({ agent_id: 'a', cards: [] })).toEqual({ summary: 'no Card issued', issued: false })
