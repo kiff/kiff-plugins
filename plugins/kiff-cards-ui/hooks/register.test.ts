@@ -149,3 +149,33 @@ test("when permissions refuse the kiff_card read, it stops reading in the backgr
   await $.tool.call({ tool: 'mcp__kiff__get_orders', customer_id: 'cus_3' })
   expect(reads).toBe(1)
 })
+
+test('after permission is granted, /kiff reads the Card and background reads resume', async ($, on) => {
+  let allowed = false
+  let reads = 0
+  const status: (string | undefined)[] = []
+  on('ui.status', (_$, e) => {
+    status.push(e.text)
+    return { value: undefined }
+  })
+  on('clock.now', () => ({ value: NOW }))
+  on('ui.open', () => ({ value: {} }) as never)
+  on('ui.toast', () => ({ value: undefined }))
+  on('tool.list', () => ({ value: [{ name: 'mcp__kiff__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
+  on('mcp.call', () => {
+    reads++
+    return allowed
+      ? { value: { content: [{ type: 'text', text: JSON.stringify(CARD) }], isError: false } }
+      : { value: { content: [{ type: 'text', text: "Claude requested permissions to use mcp__kiff__kiff_card, but you haven't granted it yet." }], isError: true } }
+  })
+  on('tool.call', () => ({ result: { content: [] }, text: 'ok', isError: false }) as never)
+  await $.tool.call({ tool: 'mcp__kiff__get_orders', customer_id: 'cus_1' })
+  await $.tool.call({ tool: 'mcp__kiff__get_orders', customer_id: 'cus_2' })
+  expect(reads).toBe(1)
+  allowed = true // the person allowed kiff_card with /permissions
+  await $.command.run({ command: 'kiff', args: '' } as never)
+  expect(reads).toBe(2)
+  await $.tool.call({ tool: 'mcp__kiff__get_orders', customer_id: 'cus_3' })
+  expect(reads).toBe(3)
+  expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
+})

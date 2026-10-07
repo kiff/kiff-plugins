@@ -214,7 +214,11 @@ export function summarizeCardText(text: string | undefined): KiffCard | undefine
   return { summary: best ? best.line : 'Card active', issued: true }
 }
 
-/** True when Claude Code's permissions, not KIFF, refused a call. */
+/**
+ * True when Claude Code's permissions, not KIFF, refused a call. Matched on
+ * Claude Code's English wording (seen live with 2.1.292); if that wording
+ * changes, the plugin only keeps asking, it never shows a wrong answer.
+ */
 export function permissionRefused(text: string): boolean {
   return /requested permissions to use .+, but you haven't granted it yet/.test(text)
 }

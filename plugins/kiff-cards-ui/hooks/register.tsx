@@ -54,8 +54,9 @@ async function findServer($: Engine): Promise<string | null> {
 }
 
 // Set when Claude Code's permissions refused the plugin's kiff_card read:
-// background reads stop for the session, so nobody is asked after every
-// call. /kiff still reads, since the person asked for it.
+// background reads stop, so nobody is asked after every call. /kiff still
+// reads, since the person asked for it, and a read that succeeds (the
+// person allowed kiff_card meanwhile) turns background reads back on.
 let cardReadRefused = false
 
 /** Reads the Card through the gateway's read-only kiff_card tool. */
@@ -68,6 +69,7 @@ async function refreshCard($: Engine, asked = false) {
     if (permissionRefused(res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n'))) cardReadRefused = true
     return
   }
+  cardReadRefused = false
   const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
   const summary = summarizeCard(res.structuredContent) ?? summarizeCardText(text)
   if (summary) await update($, card, () => summary)
