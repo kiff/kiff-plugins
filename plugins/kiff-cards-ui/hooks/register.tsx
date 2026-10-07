@@ -7,7 +7,7 @@
 // agent's own retry of the same call gets that answer.
 
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface as Engine, Register } from 'claude-code'
+import type { EngineInterface as Engine, McpToolResult, Register } from 'claude-code'
 
 import type { KiffCall, KiffCard } from '../types'
 import {
@@ -59,12 +59,34 @@ async function findServer($: Engine): Promise<string | null> {
 // person allowed kiff_card meanwhile) turns background reads back on.
 let cardReadRefused = false
 
+// The gateway's server names, in the tool-name spelling $.mcp.call takes:
+// this repo's kiff-cards plugin, a connect link added as "kiff", and the
+// claude.ai connector. Tried when the tool list has no KIFF tool, which
+// happens when Claude Code defers MCP tools behind tool search.
+const KNOWN_SERVERS = ['plugin_kiff-cards_kiff', 'kiff', 'claude_ai_KIFF']
+
+/** Calls kiff_card on the gateway: the one already found, or the first known name that answers. */
+async function callCard($: Engine): Promise<McpToolResult | null> {
+  const name = await findServer($)
+  if (name) return $.mcp.call(name, CARD_TOOL, {})
+  for (const candidate of KNOWN_SERVERS) {
+    let res: McpToolResult
+    try {
+      res = await $.mcp.call(candidate, CARD_TOOL, {})
+    } catch {
+      continue // no such server, or no kiff_card on it
+    }
+    await update($, server, () => candidate)
+    return res
+  }
+  return null
+}
+
 /** Reads the Card through the gateway's read-only kiff_card tool. */
 async function refreshCard($: Engine, asked = false) {
   if (cardReadRefused && !asked) return
-  const name = await findServer($)
-  if (!name) return
-  const res = await $.mcp.call(name, CARD_TOOL, {})
+  const res = await callCard($)
+  if (!res) return
   if (res.isError) {
     if (permissionRefused(res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n'))) cardReadRefused = true
     return

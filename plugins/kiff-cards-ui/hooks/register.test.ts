@@ -179,3 +179,25 @@ test('after permission is granted, /kiff reads the Card and background reads res
   expect(reads).toBe(3)
   expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
 })
+
+test('finds the gateway by name when its tools are deferred out of the tool list (seen interactively, 2026-10-07)', async ($, on) => {
+  const status: (string | undefined)[] = []
+  const tried: string[] = []
+  on('ui.status', (_$, e) => {
+    status.push(e.text)
+    return { value: undefined }
+  })
+  on('clock.now', () => ({ value: NOW }))
+  on('ui.open', () => ({ value: {} }) as never)
+  on('tool.list', () => ({ value: [] })) // tool search deferred every MCP tool
+  on('mcp.call', (_$, e) => {
+    tried.push(e.server)
+    if (e.server !== 'claude_ai_KIFF') throw new Error(`no connected MCP tool "kiff_card" on a server named "${e.server}"`)
+    return { value: { content: [{ type: 'text', text: JSON.stringify(CARD) }], isError: false } }
+  })
+  const answer = await $.command.run({ command: 'kiff', args: '' } as never)
+
+  expect(tried).toEqual(['plugin_kiff-cards_kiff', 'kiff', 'claude_ai_KIFF'])
+  expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
+  expect(JSON.stringify(answer)).toMatch(/KIFF Card: 320 of 500 amount left today/)
+})
