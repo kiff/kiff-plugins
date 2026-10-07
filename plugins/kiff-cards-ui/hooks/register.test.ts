@@ -122,7 +122,7 @@ test('at session start, the Card is read once the gateway has connected', async 
   on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
   on('mcp.call', () => {
     tries++
-    if (tries === 1) throw new Error('no connected MCP tool "kiff_card" on a server named "claude_ai_KIFF"')
+    if (tries === 1) return { deny: 'no connected MCP tool "kiff_card" on a server named "claude_ai_KIFF"' }
     // As the claude.ai connector sends it: the Card's JSON as text.
     return { value: { content: [{ type: 'text', text: JSON.stringify(CARD) }], isError: false } }
   })
@@ -237,9 +237,7 @@ test('a deny rule that removes kiff_card is reported as blocked, not as no gatew
   on('ui.open', () => ({ value: {} }) as never)
   // The other KIFF tools are listed; kiff_card was removed by the deny rule.
   on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__get_orders', description: 'Orders', mcp: true }] }))
-  on('mcp.call', () => {
-    throw new Error('no connected MCP tool "kiff_card" on a server named "claude_ai_KIFF"')
-  })
+  on('mcp.call', () => ({ deny: 'no connected MCP tool "kiff_card" on a server named "claude_ai_KIFF"' }))
   const answer = await $.command.run({ command: 'kiff', args: '' } as never)
 
   expect(toasts).toEqual([
@@ -269,6 +267,51 @@ test('/kiff asks through Claude Code\'s own permission path when the quiet read 
   expect(JSON.stringify(answer)).toContain('KIFF Card: 320 of 500 amount left today.')
 })
 
+test('the thrown refusal is shown without the engine prefix (exact text from an interactive debug log, 2026-10-07)', async ($, on) => {
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: NOW }))
+  on('ui.open', () => ({ value: {} }) as never)
+  on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
+  on('tool.call', () => ({ deny: 'Auto mode classifier unavailable' }))
+  // The engine wraps a refusal as "HooksError: kiff-cards-ui: $.mcp.call(claude_ai_KIFF, kiff_card)
+  // refused: <reason>", exactly as the interactive debug log showed.
+  on('mcp.call', () => ({ deny: 'The server-side auto mode classifier gave no verdict for mcp__claude_ai_KIFF__kiff_card' }))
+  await $.command.run({ command: 'kiff', args: '' } as never)
+
+  expect(toasts).toHaveLength(1)
+  expect(toasts[0]).toContain("can't read your Card (The server-side auto mode classifier gave no verdict")
+  expect(toasts[0]).not.toContain('HooksError')
+})
+
+test('an auto mode block thrown during the probe still names the gateway and is explained (interactive, 2026-10-07)', async ($, on) => {
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: NOW }))
+  on('ui.open', () => ({ value: {} }) as never)
+  on('tool.list', () => ({ value: [] })) // deferred
+  on('mcp.call', (_$, e) =>
+    e.server === 'claude_ai_KIFF'
+      ? { deny: 'claude.ai KIFF - Show my KIFF Card (MCP) denied by auto mode' }
+      : { deny: `no connected MCP tool "kiff_card" on a server named "${e.server}"` },
+  )
+  on('tool.call', () => ({ deny: 'denied by auto mode' }))
+  const answer = await $.command.run({ command: 'kiff', args: '' } as never)
+
+  expect(toasts).toHaveLength(1)
+  expect(toasts[0]).toContain('denied by auto mode')
+  expect(toasts[0]).toContain('allow mcp__claude_ai_KIFF__kiff_card in /permissions')
+  expect(JSON.stringify(answer)).not.toContain('No KIFF gateway')
+})
+
 test('finds the gateway by name when its tools are deferred out of the tool list (seen interactively, 2026-10-07)', async ($, on) => {
   const status: (string | undefined)[] = []
   const tried: string[] = []
@@ -281,7 +324,7 @@ test('finds the gateway by name when its tools are deferred out of the tool list
   on('tool.list', () => ({ value: [] })) // tool search deferred every MCP tool
   on('mcp.call', (_$, e) => {
     tried.push(e.server)
-    if (e.server !== 'claude_ai_KIFF') throw new Error(`no connected MCP tool "kiff_card" on a server named "${e.server}"`)
+    if (e.server !== 'claude_ai_KIFF') return { deny: `no connected MCP tool "kiff_card" on a server named "${e.server}"` }
     return { value: { content: [{ type: 'text', text: JSON.stringify(CARD) }], isError: false } }
   })
   const answer = await $.command.run({ command: 'kiff', args: '' } as never)

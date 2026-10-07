@@ -89,6 +89,19 @@ function firstLine(text: string): string {
 // happens when Claude Code defers MCP tools behind tool search.
 const KNOWN_SERVERS = ['plugin_kiff-cards_kiff', 'kiff', 'claude_ai_KIFF']
 
+// What $.mcp.call throws when the server or its kiff_card is not there
+// (seen live). Any other throw means the call reached Claude Code's checks
+// or the gateway and failed there: interactively, a permission or auto mode
+// block arrives as a throw, not as an error result.
+const NOT_CONNECTED = /no connected MCP tool/i
+
+/** A thrown $.mcp.call error as an error result, so it is explained like one. */
+function thrownResult(err: unknown): McpToolResult {
+  // e.g. "HooksError: kiff-cards-ui: $.mcp.call(claude_ai_KIFF, kiff_card) refused: <why>"
+  const text = String(err).replace(/^[\s\S]*?\$\.mcp\.call(\([^)]*\))?( refused)?: /, '')
+  return { content: [{ type: 'text', text }], isError: true }
+}
+
 /** Calls kiff_card on the gateway: the one already found, or the first known name that answers. */
 async function callCard($: Engine): Promise<McpToolResult | null> {
   const name = await findServer($)
@@ -96,6 +109,7 @@ async function callCard($: Engine): Promise<McpToolResult | null> {
     try {
       return await $.mcp.call(name, CARD_TOOL, {})
     } catch (err) {
+      if (!NOT_CONNECTED.test(String(err))) return thrownResult(err)
       // Listed but not answering: the connector is still connecting, so let
       // the caller try again later.
       if ((await $.tool.list()).some(t => t.name === `mcp__${name}__${CARD_TOOL}`)) throw err
@@ -108,8 +122,9 @@ async function callCard($: Engine): Promise<McpToolResult | null> {
     let res: McpToolResult
     try {
       res = await $.mcp.call(candidate, CARD_TOOL, {})
-    } catch {
-      continue // no such server, or no kiff_card on it
+    } catch (err) {
+      if (NOT_CONNECTED.test(String(err))) continue // no such server here
+      res = thrownResult(err) // the server is there; the read was blocked or failed
     }
     await update($, server, () => candidate)
     return res
