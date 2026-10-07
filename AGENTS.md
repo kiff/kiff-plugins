@@ -13,6 +13,9 @@ for an admin to issue, and handle a held call.
   (`https://mcp.kiff.dev/mcp`).
 - `plugins/kiff-cards/skills/kiff/SKILL.md` and
   `plugins/kiff-cards/skills/kiff-domains/SKILL.md`: the skills.
+- `plugins/kiff-cards-ui/`: the optional display plugin (status line, held
+  call notice, `/kiff` pane). A hooks module in `hooks/`, its session-state
+  contract in `types/index.d.ts`, tests in `hooks/*.test.ts`. Display only.
 - `.github/workflows/skills-in-sync.yml`: the CI check described below.
 
 ## Skills are copies: do not edit them here
@@ -52,6 +55,11 @@ version live.
   `.claude-plugin/marketplace.json`, to the same value.
 - Run `claude plugin validate ./plugins/kiff-cards` and
   `claude plugin validate .` before opening the PR.
+- The same for `plugins/kiff-cards-ui/`: raise its `version` in its
+  `plugin.json` and in `marketplace.json`, and run
+  `claude plugin validate ./plugins/kiff-cards-ui` and
+  `claude plugin test ./plugins/kiff-cards-ui`. It must stay display only:
+  never add a hook that answers, retries or rewrites a KIFF call.
 - Merging to `main` is the release. Do not merge a change that is not ready
   to ship.
 

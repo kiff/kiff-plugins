@@ -126,6 +126,50 @@ The link URL is not a secret: it only says which agent. Every connection,
 sign-in or key, is listed and can be revoked on **Connections** in KIFF Cloud.
 Revoking the link ends every connection made through it.
 
+## Optional: see the Card in Claude Code
+
+`kiff-cards-ui` is a second, optional plugin. It needs `kiff-cards` connected
+to the gateway, and a Claude Code version that runs plugin hooks modules.
+
+```text
+/plugin install kiff-cards-ui@kiff
+```
+
+- **Status line:** what is left on the agent's Card, for example
+  `KIFF · 320 of 500 amount left today · 1 waiting for approval`.
+- **A notice when KIFF holds a call:** what was held, that nothing was sent,
+  and the link where a person answers it in KIFF Cloud.
+- **`/kiff`:** a pane with this session's KIFF calls and what KIFF answered:
+  allowed, waiting for approval, refused, or outcome unknown.
+
+It only displays. It reads what the gateway already answered and the
+gateway's read-only `kiff_card` tool. It never answers, retries or changes a
+call, so a held call keeps waiting for a person in KIFF Cloud, and only the
+agent's own retry of the same call gets their answer. If it fails, calls go
+on as they would without it: the gateway enforces the Card either way.
+
+The status line reads the Card with the gateway's read-only `kiff_card`
+tool, which Claude Code's permissions cover like any other tool. A plugin
+cannot grant itself a permission, so allow it once:
+
+- **The easy way:** type `/kiff`. If the Card could not be read, Claude
+  Code asks whether to allow `kiff_card`; choose to always allow it. In
+  auto mode Claude Code decides without asking, so use the rule below.
+- **Or by hand:** `/permissions` → **Allow** → add a rule that is just the
+  tool's name (no "allow" in front), the one that matches how the gateway
+  is connected, and save it under **User settings** so it applies in every
+  folder (saved for a project, it only applies there):
+  - `mcp__plugin_kiff-cards_kiff__kiff_card` (this repo's `kiff-cards` plugin)
+  - `mcp__kiff__kiff_card` (a connect link added as `kiff`)
+  - `mcp__claude_ai_KIFF__kiff_card` (the claude.ai KIFF connector)
+
+Until it is allowed, the plugin says so once and stops reading in the
+background, instead of asking after every call. Once it is allowed,
+background reads start again.
+
+The amount it shows is a guess: the first argument whose name contains
+"amount". Links in a notice or the pane open only `https://app.kiff.dev`.
+
 ## What it will not do
 
 - Issue or change a Card. It drafts the terms; the owner issues them.
