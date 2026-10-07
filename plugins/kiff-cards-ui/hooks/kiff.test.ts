@@ -101,6 +101,18 @@ describe('review fixes: every gateway message', () => {
   }
 })
 
+describe('live shapes (claude.ai connector, 2026-10-07)', () => {
+  // In a tool.call hook an MCP result is a string and carries no _meta.
+  const text = 'Refused: kiff_operation_id live-diag-1791360870-a was already used for this tool with different arguments. Use a new kiff_operation_id for a new action.'
+  test('a refusal reaches the hook as text, with or without "Error: "', () => {
+    expect(readAnswer(`Error: ${text}`, text, true)).toEqual({ state: 'refused', reasons: ['operation_id_reused'] })
+    expect(readAnswer(`Error: ${text}`, `Error: ${text}`, true)).toEqual({ state: 'refused', reasons: ['operation_id_reused'] })
+  })
+  test("a tool's own error is a tool error", () => {
+    expect(readAnswer('Error: No customer with that id.', 'No customer with that id.', true)).toEqual({ state: 'tool_error' })
+  })
+})
+
 describe('calls', () => {
   test('key is server, tool and operation id; amount the amount argument', () => {
     expect(describeCall('kiff', 'refund', { tool: 'mcp__kiff__refund', tool_use_id: 'tu_1', amount: 80, kiff_operation_id: 'op-1' })).toEqual({
@@ -172,6 +184,14 @@ describe('the Card', () => {
       issued: false,
     })
     expect(summarizeCardText('Refund re_1 created.')).toBeUndefined()
+  })
+  test('reads the Card from JSON text, as the claude.ai connector sends it (live, 2026-10-07)', () => {
+    const live =
+      '{"agent_id":"support-demo","cards":[{"grants":[{"action":"draft_support_reply"},{"action":"get_order"},{"action":"get_orders"},' +
+      '{"action":"search_customers"}],"id":"support-demo-card","limits":[{"limit":100,"quantity":"count","remaining":99,"status":"ok",' +
+      '"used":1,"window":"calendar_day"}],"on_exceed":"owner"}]}'
+    expect(summarizeCardText(live)).toEqual({ summary: '99 of 100 calls left today', issued: true })
+    expect(summarizeCardText('{not json')).toBeUndefined()
   })
   test('is not fooled by other results', () => {
     expect(summarizeCard('text')).toBeUndefined()

@@ -63,15 +63,28 @@ async function refreshCard($: Engine) {
   if (summary) await update($, card, () => summary)
 }
 
+/** Reads the Card once the gateway has connected: a few tries, 5 s apart. */
+async function readCardAtStart($: Engine) {
+  for (let i = 0; i < 4; i++) {
+    if (i > 0) await $.clock.sleep(5000)
+    try {
+      await refreshCard($)
+    } catch {
+      continue
+    }
+    if (await read($, card)) break
+  }
+  await showStatus($)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'kiff',
       description: "Show this agent's KIFF Card and this session's KIFF calls",
     })
-    void refreshCard($)
-      .then(() => showStatus($))
-      .catch(() => {})
+    // MCP servers may still be connecting when the session starts.
+    void readCardAtStart($).catch(() => {})
     return next(e)
   })
 

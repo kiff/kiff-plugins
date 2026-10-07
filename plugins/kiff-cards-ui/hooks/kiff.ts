@@ -103,7 +103,8 @@ export function readAnswer(
       holdExpiresAt: meta.hold_expires_at || undefined,
     }
   }
-  const t = text ?? ''
+  // Claude Code may lead an error result's text with "Error: ".
+  const t = (text ?? '').replace(/^Error: /, '')
   const refused = /^Refused by KIFF \(([^):]*)(?::\s*([^)]*))?\)/.exec(t)
   if (refused) {
     const reasons = refused[2]?.split(',').map(r => r.trim()).filter(Boolean)
@@ -193,7 +194,17 @@ export function summarizeCard(structured: unknown): KiffCard | undefined {
  * not reach the plugin (the tool declares no output schema).
  */
 export function summarizeCardText(text: string | undefined): KiffCard | undefined {
-  if (!text || !text.startsWith('You act as agent ')) return undefined
+  if (!text) return undefined
+  // Some connections (the claude.ai connector) hand the Card over as its
+  // JSON, in the text, with no structuredContent.
+  if (text.trimStart().startsWith('{')) {
+    try {
+      return summarizeCard(JSON.parse(text))
+    } catch {
+      return undefined
+    }
+  }
+  if (!text.startsWith('You act as agent ')) return undefined
   if (text.includes('No Card of yours applies here')) return { summary: 'no Card issued', issued: false }
   let best: { remaining: number; limit: number; line: string } | undefined
   for (const m of text.matchAll(/(\d+) of (\d+) (\S+) left (today|in the last hour|in the last 24 hours|in this window)/g)) {
