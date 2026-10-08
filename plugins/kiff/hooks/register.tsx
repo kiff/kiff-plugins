@@ -279,9 +279,11 @@ async function checkHolds($: Engine, asked = false) {
     }
     if (ended) scan = null
     // A hold past its bound got its last read only when this check listed
-    // it, or the scan ended without listing a hold it searched for from its
-    // first page. A scan cut short or failing keeps it asked about.
-    const lastRead = (id: string) => listed.has(id) || (ended && current.wanted.has(id) && !current.seen.has(id))
+    // it with an answer KIFF could read (waiting counts; unavailable does
+    // not), or the scan ended without listing a hold it searched for from
+    // its first page. A scan cut short or failing keeps it asked about.
+    const lastRead = (id: string) =>
+      listed.has(id) ? !listed.get(id)!.unread : ended && current.wanted.has(id) && !current.seen.has(id)
     const now = await $.clock.now()
     const told: KiffCall[] = []
     await update($, calls, list =>

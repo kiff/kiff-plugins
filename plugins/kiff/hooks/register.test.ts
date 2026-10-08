@@ -705,3 +705,23 @@ test('a failed read keeps the scan where it was; a new session starts from the n
   await clock.advance(15000)
   expect(seen.cursors[before]).toBeUndefined()
 })
+
+// Review on #14: kiff_pending lists the hold, but KIFF could not read the
+// owner's answer (unavailable). That is not the hold's last read: once KIFF
+// can read it again, an approval given in time is announced without /kiff.
+test('an unavailable owner answer past the grace keeps automatic recovery', async ($, on) => {
+  let ownerReadAvailable = false
+  const { clock, seen } = holdRig(on, {
+    status: () => (ownerReadAvailable ? 'approved' : 'unavailable'),
+    refuse: false,
+    expires: '2026-10-06T14:00:30Z',
+  })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-unavailable', 'o-unavailable'))
+  await clock.advance(5 * 60 * 1000)
+  expect(seen.prompts).toEqual([])
+  ownerReadAvailable = true
+  await clock.advance(15000)
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.prompts[0]).toMatch(/kiff_operation_id op-unavailable,/)
+})

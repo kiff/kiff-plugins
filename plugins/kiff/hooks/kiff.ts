@@ -345,6 +345,11 @@ export function exceptionFromLink(url: string | undefined): string | undefined {
 export type PendingHold = {
   /** The owner's answer; undefined while it still waits or KIFF could not say. */
   answer?: KiffAnswer
+  /**
+   * True when KIFF could not read the owner's answer (unavailable, or a word
+   * it does not know): the hold was listed, but its answer was not read.
+   */
+  unread?: boolean
   /** KIFF's key for a call made without an id, when kiff_pending gives one. */
   collectId?: string
 }
@@ -383,7 +388,8 @@ export function readPending(structured: unknown, text: string | undefined): Pend
     const e = c as { state?: unknown; exception_id?: unknown; answer?: unknown; kiff_operation_id?: unknown }
     if (e?.state !== 'held' || typeof e.exception_id !== 'string') continue
     const op = typeof e.kiff_operation_id === 'string' && KIFF_KEY.test(e.kiff_operation_id) ? e.kiff_operation_id : undefined
-    out.set(e.exception_id, { answer: answerOf(e.answer), collectId: op })
+    const answer = answerOf(e.answer)
+    out.set(e.exception_id, { answer, unread: !answer && e.answer !== 'waiting', collectId: op })
   }
   return { holds: out, next }
 }
