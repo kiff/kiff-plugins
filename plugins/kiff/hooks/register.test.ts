@@ -375,7 +375,7 @@ function holdRig(on: On, world: HoldWorld) {
     seen.tools.push(e.tool)
     // Each held call gets its own hold, named after its operation (or its order).
     const input = e as unknown as Record<string, unknown>
-    const id = `exc-${String(input.kiff_operation_id ?? input.order_number).replace(/[^A-Za-z0-9_-]/g, '')}`
+    const id = `exc-${(String(input.kiff_operation_id ?? "").trim() || String(input.order_number)).replace(/[^A-Za-z0-9_-]/g, "")}`
     const text =
       "Waiting for the owner's approval: this call is outside the agent's Card. Nothing has been sent to the tool. " +
       `The owner can answer at https://app.kiff.dev/needs-you/${id}. Retry the same call later to get their answer ` +
@@ -455,6 +455,18 @@ test('an approval for a call without kiff_operation_id, seen after the 10 minute
   )
   expect(seen.prompts[0]).not.toMatch(/same arguments/)
   expect(seen.toasts.at(-1)).toMatch(/check it in KIFF Cloud before calling again/)
+})
+
+// Review on #12 at 70117f7: a whitespace-only id is no id to the gateway,
+// which trims it, so its approval must not tell the agent to call again.
+test('an approval for a call with a whitespace-only kiff_operation_id does not tell the agent to call again', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'approved', refuse: false })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('   ', '70349'))
+  await clock.advance(15000)
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.prompts[0]).toMatch(/It was made without a kiff_operation_id/)
+  expect(seen.prompts[0]).not.toMatch(/same arguments|you used for it/)
 })
 
 // Review on #12 (P2, kiff.ts): an explicit id the plugin will not repeat

@@ -152,18 +152,20 @@ export function describeCall(
   tool: string,
   input: Record<string, unknown>,
 ): Pick<KiffCall, 'key' | 'amount' | 'operationId' | 'hasOperationId'> {
-  const op = input[OPERATION_ARG]
+  // The gateway trims the id, so a blank one is no id: read it the same way.
+  const raw = input[OPERATION_ARG]
+  const op = typeof raw === 'string' ? raw.trim() : ''
   const args: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(input)) if (!RESERVED.has(k)) args[k] = v
-  const key = typeof op === 'string' && op !== '' ? `${server}/${tool}#op:${op}` : `${server}/${tool}#args:${canonical(args)}`
+  const key = op !== '' ? `${server}/${tool}#op:${op}` : `${server}/${tool}#args:${canonical(args)}`
   // A guess: the first argument named like an amount.
   const amountArg = Object.keys(args).find(k => /amount/i.test(k) && (typeof args[k] === 'number' || typeof args[k] === 'string'))
   return {
     key,
     amount: amountArg ? `${amountArg} ${String(args[amountArg])}` : undefined,
     // Only a plain id is repeated back to the agent in a prompt.
-    operationId: typeof op === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(op) ? op : undefined,
-    hasOperationId: typeof op === 'string' && op !== '',
+    operationId: /^[A-Za-z0-9._:-]{1,128}$/.test(op) ? op : undefined,
+    hasOperationId: op !== '',
   }
 }
 
