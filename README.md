@@ -146,7 +146,10 @@ gateway, and a Claude Code version that runs plugin hooks modules. (Until
   approves or refuses it, or the wait ends, it shows one notice and starts
   one turn telling the agent (Claude Code runs it when the session is idle,
   never in the middle of a turn). On an approval the agent is told to call
-  again with the same `kiff_operation_id`; that call gets the result.
+  again with the same `kiff_operation_id`; that call gets the result. A call
+  made without a `kiff_operation_id` is not told to call again (a new call
+  could count as a new operation); the agent is told to check it in KIFF
+  Cloud first.
 - **`/kiff`:** a pane with this session's KIFF calls and what KIFF answered:
   allowed, waiting for approval, approved, refused, or outcome unknown.
 

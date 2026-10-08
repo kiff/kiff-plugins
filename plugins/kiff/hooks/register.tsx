@@ -13,7 +13,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, McpToolResult, Register } from 'claude-code'
 
-import type { KiffCall, KiffCard } from '../types'
+import type { KiffAnswer, KiffCall, KiffCard } from '../types'
 import {
   answerPrompt,
   answerToast,
@@ -35,6 +35,8 @@ import {
 const PANE = 'kiff'
 // How often a held call's answer is asked for, only while one is held.
 const HOLD_CHECK_MS = 15000
+// The most held calls one kiff_card read asks about (the gateway's limit).
+const HOLDS_PER_READ = 20
 
 const calls = atom({ plugin: 'kiff', key: 'calls' } as const, [] as KiffCall[])
 const card = atom({ plugin: 'kiff', key: 'card' } as const, null as KiffCard | null)
@@ -151,21 +153,29 @@ async function callCard($: Engine, args: Record<string, unknown> = {}): Promise<
   return null
 }
 
+/**
+ * A failed kiff_card read, background or hold check alike: a refusal stops
+ * every background read (the Card and held calls) until a read succeeds,
+ * and is explained once.
+ */
+async function cardReadFailed($: Engine, res: McpToolResult) {
+  const errorText = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
+  if (!permissionRefused(errorText)) return
+  cardReadRefused = true
+  cardReadError = firstLine(errorText)
+  if (!refusalShown) {
+    refusalShown = true
+    $.ui.toast(await refusalNotice($), { timeoutMs: 15000 })
+  }
+}
+
 /** Reads the Card through the gateway's read-only kiff_card tool. */
 async function refreshCard($: Engine, asked = false) {
   if (cardReadRefused && !asked) return
   const res = await callCard($)
   if (!res) return
   if (res.isError) {
-    const errorText = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
-    if (permissionRefused(errorText)) {
-      cardReadRefused = true
-      cardReadError = firstLine(errorText)
-      if (!refusalShown) {
-        refusalShown = true
-        $.ui.toast(await refusalNotice($), { timeoutMs: 15000 })
-      }
-    }
+    await cardReadFailed($, res)
     return
   }
   cardReadRefused = false
@@ -184,16 +194,26 @@ let checking = false
  */
 async function checkHolds($: Engine) {
   if (checking || cardReadRefused) return
-  const asked = holdsToCheck(await read($, calls)).slice(0, 20)
-  if (asked.length === 0) return
+  const pending = holdsToCheck(await read($, calls))
+  if (pending.length === 0) return
   checking = true
   try {
-    const res = await callCard($, { holds: asked.map(c => c.exceptionId) })
-    if (!res || res.isError) return
-    const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
-    const summary = summarizeCard(res.structuredContent) ?? summarizeCardText(text)
-    if (summary) await update($, card, () => summary)
-    const answers = readHolds(res.structuredContent, text)
+    // Every held call each time, in reads of at most HOLDS_PER_READ (the
+    // gateway's limit), so no hold waits behind others that stay held.
+    const answers = new Map<string, KiffAnswer>()
+    for (let i = 0; i < pending.length; i += HOLDS_PER_READ) {
+      const batch = pending.slice(i, i + HOLDS_PER_READ)
+      const res = await callCard($, { holds: batch.map(c => c.exceptionId) })
+      if (!res) return
+      if (res.isError) {
+        await cardReadFailed($, res)
+        return
+      }
+      const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
+      const summary = summarizeCard(res.structuredContent) ?? summarizeCardText(text)
+      if (summary) await update($, card, () => summary)
+      for (const [id, answer] of readHolds(res.structuredContent, text)) answers.set(id, answer)
+    }
     const told: KiffCall[] = []
     await update($, calls, list =>
       list.map(c => {

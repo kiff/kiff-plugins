@@ -149,6 +149,7 @@ describe('calls', () => {
       key: 'kiff/refund#op:op-1',
       amount: 'amount 80',
       operationId: 'op-1',
+      hasOperationId: true,
     })
   })
   test('the same operation id on two tools is two calls', () => {
@@ -298,8 +299,11 @@ describe('held calls and their answers (#1069)', () => {
     ]
     expect(holdsToCheck(calls).map(c => c.key)).toEqual(['a'])
   })
-  test('the prompt without an operation id still says to call again with the same arguments', () => {
-    const call = { key: 'k', tool: 'refund', state: 'held' as const, at: 1, answer: 'approved' as const }
-    expect(answerPrompt(call)).toBe('KIFF: the owner approved the held refund call. Call refund again with the same arguments to get its result.')
+  test('only a call with an operation id is told to call again (review on #12)', () => {
+    const call = { key: 'k', tool: 'refund', state: 'held' as const, at: 1, answer: 'approved' as const, exceptionId: 'exc-1' }
+    expect(answerPrompt(call)).not.toMatch(/same arguments/)
+    expect(answerPrompt(call)).toMatch(/may count as a new call/)
+    expect(answerPrompt({ ...call, hasOperationId: true })).toMatch(/the same kiff_operation_id you used for it/)
+    expect(answerPrompt({ ...call, hasOperationId: true, operationId: 'op-1' })).toMatch(/kiff_operation_id op-1, KIFF hold exc-1/)
   })
 })

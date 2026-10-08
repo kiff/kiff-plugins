@@ -147,7 +147,11 @@ function canonical(v: unknown): string {
  * The gateway counts an identical call as a retry only within 10 minutes;
  * here a later identical call without an id replaces the earlier entry.
  */
-export function describeCall(server: string, tool: string, input: Record<string, unknown>): Pick<KiffCall, 'key' | 'amount' | 'operationId'> {
+export function describeCall(
+  server: string,
+  tool: string,
+  input: Record<string, unknown>,
+): Pick<KiffCall, 'key' | 'amount' | 'operationId' | 'hasOperationId'> {
   const op = input[OPERATION_ARG]
   const args: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(input)) if (!RESERVED.has(k)) args[k] = v
@@ -159,6 +163,7 @@ export function describeCall(server: string, tool: string, input: Record<string,
     amount: amountArg ? `${amountArg} ${String(args[amountArg])}` : undefined,
     // Only a plain id is repeated back to the agent in a prompt.
     operationId: typeof op === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(op) ? op : undefined,
+    hasOperationId: typeof op === 'string' && op !== '',
   }
 }
 
@@ -352,7 +357,9 @@ export function answerOf(status: unknown): KiffAnswer | undefined {
 export function answerToast(call: KiffCall): string {
   const what = call.amount ? `${call.tool} (${call.amount})` : call.tool
   return {
-    approved: `KIFF: the owner approved ${what}. The agent is told to call it again to get the result.`,
+    approved: call.hasOperationId
+      ? `KIFF: the owner approved ${what}. The agent is told to call it again to get the result.`
+      : `KIFF: the owner approved ${what}. It had no kiff_operation_id, so the agent is told to check it in KIFF Cloud before calling again.`,
     refused: `KIFF: the owner refused ${what}. Nothing was sent.`,
     expired: `KIFF: ${what} was not answered in time. Nothing was sent.`,
   }[call.answer!]
@@ -365,12 +372,19 @@ export function answerToast(call: KiffCall): string {
  * decides whether to call again.
  */
 export function answerPrompt(call: KiffCall): string {
+  // KIFF's own hold id names the call; it is checked to be one.
+  const hold = call.exceptionId ? `KIFF hold ${call.exceptionId}` : ''
   const which = call.operationId
-    ? `the held ${call.tool} call (kiff_operation_id ${call.operationId})`
-    : `the held ${call.tool} call`
+    ? `the held ${call.tool} call (kiff_operation_id ${call.operationId}${hold ? `, ${hold}` : ''})`
+    : `the held ${call.tool} call${hold ? ` (${hold})` : ''}`
+  // A retry reaches the approved call only through the same operation: an
+  // identical call without an id counts as the same one for 10 minutes
+  // only, so without an id the agent is not told to call again.
   const again = call.operationId
     ? `Call ${call.tool} again with the same arguments and the same kiff_operation_id to get its result; it is sent once.`
-    : `Call ${call.tool} again with the same arguments to get its result.`
+    : call.hasOperationId
+      ? `Call ${call.tool} again with the same arguments and the same kiff_operation_id you used for it to get its result; it is sent once.`
+      : `It was made without a kiff_operation_id, so calling ${call.tool} again now may count as a new call rather than this approved one. Check its outcome in KIFF Cloud (Needs you) before calling it again.`
   return {
     approved: `KIFF: the owner approved ${which}. ${again}`,
     refused: `KIFF: the owner refused ${which}. Nothing was sent. Do not call it again unless the user asks.`,

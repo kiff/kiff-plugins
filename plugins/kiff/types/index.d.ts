@@ -28,8 +28,10 @@ export type KiffCall = {
   holdExpiresAt?: string
   /** The hold's exception id, which kiff_card is asked about. */
   exceptionId?: string
-  /** The call's kiff_operation_id, if it had one. */
+  /** The call's kiff_operation_id, only when it is a plain id that can be repeated in a prompt. */
   operationId?: string
+  /** True when the call had a kiff_operation_id, plain or not. */
+  hasOperationId?: boolean
   /** The owner's answer to a held call, read through kiff_card. */
   answer?: KiffAnswer
   /** True once the answer was shown and the agent was told, so only once. */
