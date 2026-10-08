@@ -1,23 +1,31 @@
-// KIFF Cards UI: the agent's Card in Claude Code's status line, a notice when
-// KIFF holds a call, and this session's KIFF calls in a /kiff pane.
+// KIFF in Claude Code: the agent's Card in the status line, a notice when
+// KIFF holds a call, the owner's answer once it is in, and this session's
+// KIFF calls in a /kiff pane.
 //
-// Display only. It reads what the KIFF gateway already answered and the
-// gateway's read-only kiff_card tool. It never answers, retries or changes
-// a call: a held call is answered by a person in KIFF Cloud, and only the
-// agent's own retry of the same call gets that answer.
+// It reads what the KIFF gateway already answered and the gateway's
+// read-only kiff_card tool. It never answers, retries or changes a call: a
+// held call is answered by a person in KIFF Cloud, and only the agent's own
+// retry of the same call gets that answer. While a call is held it asks
+// kiff_card every 15 seconds whether the owner answered; when they have, it
+// says so once and starts one turn telling the agent, which decides
+// whether to call again.
 
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, McpToolResult, Register } from 'claude-code'
 
 import type { KiffCall, KiffCard } from '../types'
 import {
+  answerPrompt,
+  answerToast,
   CARD_TOOL,
   describeCall,
   heldToast,
   holdEnded,
+  holdsToCheck,
   kiffTool,
   permissionRefused,
   readAnswer,
+  readHolds,
   statusLine,
   summarizeCard,
   summarizeCardText,
@@ -25,10 +33,12 @@ import {
 } from './kiff'
 
 const PANE = 'kiff'
+// How often a held call's answer is asked for, only while one is held.
+const HOLD_CHECK_MS = 15000
 
-const calls = atom({ plugin: 'kiff-cards-ui', key: 'calls' } as const, [] as KiffCall[])
-const card = atom({ plugin: 'kiff-cards-ui', key: 'card' } as const, null as KiffCard | null)
-const server = atom({ plugin: 'kiff-cards-ui', key: 'server' } as const, null as string | null)
+const calls = atom({ plugin: 'kiff', key: 'calls' } as const, [] as KiffCall[])
+const card = atom({ plugin: 'kiff', key: 'card' } as const, null as KiffCard | null)
+const server = atom({ plugin: 'kiff', key: 'server' } as const, null as string | null)
 
 async function showStatus($: Engine) {
   $.ui.status(statusLine(await read($, card), await read($, calls), await $.clock.now()))
@@ -106,17 +116,17 @@ const NOT_CONNECTED = /no connected MCP tool/i
 
 /** A thrown $.mcp.call error as an error result, so it is explained like one. */
 function thrownResult(err: unknown): McpToolResult {
-  // e.g. "HooksError: kiff-cards-ui: $.mcp.call(claude_ai_KIFF, kiff_card) refused: <why>"
+  // e.g. "HooksError: kiff: $.mcp.call(claude_ai_KIFF, kiff_card) refused: <why>"
   const text = String(err).replace(/^[\s\S]*?\$\.mcp\.call(\([^)]*\))?( refused)?: /, '')
   return { content: [{ type: 'text', text }], isError: true }
 }
 
 /** Calls kiff_card on the gateway: the one already found, or the first known name that answers. */
-async function callCard($: Engine): Promise<McpToolResult | null> {
+async function callCard($: Engine, args: Record<string, unknown> = {}): Promise<McpToolResult | null> {
   const name = await findServer($)
   if (name) {
     try {
-      return await $.mcp.call(name, CARD_TOOL, {})
+      return await $.mcp.call(name, CARD_TOOL, args)
     } catch (err) {
       if (!NOT_CONNECTED.test(String(err))) return thrownResult(err)
       // Listed but not answering: the connector is still connecting, so let
@@ -130,7 +140,7 @@ async function callCard($: Engine): Promise<McpToolResult | null> {
   for (const candidate of KNOWN_SERVERS) {
     let res: McpToolResult
     try {
-      res = await $.mcp.call(candidate, CARD_TOOL, {})
+      res = await $.mcp.call(candidate, CARD_TOOL, args)
     } catch (err) {
       if (NOT_CONNECTED.test(String(err))) continue // no such server here
       res = thrownResult(err) // the server is there; the read was blocked or failed
@@ -162,6 +172,46 @@ async function refreshCard($: Engine, asked = false) {
   const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
   const summary = summarizeCard(res.structuredContent) ?? summarizeCardText(text)
   if (summary) await update($, card, () => summary)
+}
+
+let checking = false
+
+/**
+ * Asks kiff_card whether the owner answered the held calls. Each answer is
+ * shown once, in a toast, and the agent is told once, in a turn of its own
+ * that Claude Code starts when the session is idle. Nothing here calls the
+ * held tool: the agent does, if it decides to.
+ */
+async function checkHolds($: Engine) {
+  if (checking || cardReadRefused) return
+  const asked = holdsToCheck(await read($, calls)).slice(0, 20)
+  if (asked.length === 0) return
+  checking = true
+  try {
+    const res = await callCard($, { holds: asked.map(c => c.exceptionId) })
+    if (!res || res.isError) return
+    const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
+    const summary = summarizeCard(res.structuredContent) ?? summarizeCardText(text)
+    if (summary) await update($, card, () => summary)
+    const answers = readHolds(res.structuredContent, text)
+    const told: KiffCall[] = []
+    await update($, calls, list =>
+      list.map(c => {
+        const answer = c.exceptionId && !c.announced ? answers.get(c.exceptionId) : undefined
+        if (!answer || c.state !== 'held') return c
+        const done = { ...c, answer, announced: true }
+        told.push(done)
+        return done
+      }),
+    )
+    for (const call of told) {
+      $.ui.toast(answerToast(call), { timeoutMs: 12000 })
+      void $.prompt.submit({ text: answerPrompt(call) }).catch(() => {})
+    }
+  } finally {
+    checking = false
+    await showStatus($)
+  }
 }
 
 /**
@@ -205,6 +255,10 @@ export const register: Register = on => {
     })
     // MCP servers may still be connecting when the session starts.
     void readCardAtStart($).catch(() => {})
+    // Asks only while a call is held; otherwise a tick does nothing.
+    $.clock.every(HOLD_CHECK_MS, () => {
+      void checkHolds($).catch(() => {})
+    })
     return next(e)
   })
 
@@ -285,7 +339,7 @@ export const register: Register = on => {
               {` ${call.tool}${call.amount ? ` · ${call.amount}` : ''}`}
             </Text>
             {detail(call, now) !== '' && <Text dimColor>{`  ${detail(call, now)}`}</Text>}
-            {call.state === 'held' && !holdEnded(call, now) && call.reviewUrl && (
+            {call.state === 'held' && !call.answer && !holdEnded(call, now) && call.reviewUrl && (
               <Link href={call.reviewUrl} label="  Answer in KIFF Cloud" />
             )}
           </Box>
@@ -307,7 +361,9 @@ const COLORS: Record<KiffCall['state'], 'success' | 'warning' | 'error' | 'subtl
 }
 
 function label(call: KiffCall, now: number): string {
-  if (holdEnded(call, now)) return 'wait ended'
+  if (call.answer === 'approved') return 'approved'
+  if (call.answer === 'refused') return 'refused by the owner'
+  if (call.answer === 'expired' || holdEnded(call, now)) return 'wait ended'
   return {
     allowed: 'allowed',
     held: 'waiting for approval',
@@ -321,7 +377,9 @@ function label(call: KiffCall, now: number): string {
 }
 
 function detail(call: KiffCall, now: number): string {
-  if (holdEnded(call, now)) return "If no one answered, the call was refused. The agent's retry of the same call shows the answer."
+  if (call.answer === 'approved') return 'The agent was told to call it again; that call gets the result.'
+  if (call.answer === 'refused') return 'Nothing sent.'
+  if (holdEnded(call, now) || call.answer === 'expired') return "If no one answered, the call was refused. The agent's retry of the same call shows the answer."
   if (call.state === 'held') return call.holdExpiresAt ? `Nothing sent. Waits until ${call.holdExpiresAt}.` : 'Nothing sent.'
   if (call.state === 'refused') return `Nothing sent.${call.reasons ? ` ${call.reasons.join(', ')}` : ''}`
   if (call.state === 'unknown') return 'KIFF cannot tell whether the tool received it. Check the tool before trying again.'

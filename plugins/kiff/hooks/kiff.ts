@@ -6,7 +6,7 @@
 // the tool's own result, with no KIFF metadata. Wording mirrors
 // apps/gateway/internal/gateway/{result,gateway}.go in KIFF Cloud.
 
-import type { KiffCall, KiffCallState, KiffCard } from '../types'
+import type { KiffAnswer, KiffCall, KiffCallState, KiffCard } from '../types'
 
 export const META_KEY = 'dev.kiff/call'
 export const CARD_TOOL = 'kiff_card'
@@ -29,6 +29,7 @@ type GatewayCall = {
   reasons?: string[]
   review_url?: string
   hold_expires_at?: string
+  exception_id?: string
 }
 
 /** Where a person answers a hold. A link anywhere else is not shown. */
@@ -92,15 +93,17 @@ export function readAnswer(
   result: unknown,
   text: string | undefined,
   isError: boolean | undefined,
-): Pick<KiffCall, 'state' | 'reasons' | 'reviewUrl' | 'holdExpiresAt'> {
+): Pick<KiffCall, 'state' | 'reasons' | 'reviewUrl' | 'holdExpiresAt' | 'exceptionId'> {
   if (isError !== true) return { state: 'allowed' }
   const meta = gatewayMeta(result)
   if (meta?.state && STATES[meta.state]) {
+    const reviewUrl = reviewLink(meta.review_url)
     return {
       state: STATES[meta.state]!,
       reasons: meta.reasons?.length ? meta.reasons : undefined,
-      reviewUrl: reviewLink(meta.review_url),
+      reviewUrl,
       holdExpiresAt: meta.hold_expires_at || undefined,
+      exceptionId: exceptionIdOf(meta.exception_id) ?? exceptionFromLink(reviewUrl),
     }
   }
   // Claude Code may lead an error result's text with "Error: ".
@@ -112,10 +115,12 @@ export function readAnswer(
   }
   const known = TEXTS.find(k => t.startsWith(k.prefix))
   if (known?.state === 'held' && !known.reasons) {
+    const reviewUrl = reviewLink(/The owner can answer at (\S+?)\.(\s|$)/.exec(t)?.[1])
     return {
       state: 'held',
-      reviewUrl: reviewLink(/The owner can answer at (\S+?)\.(\s|$)/.exec(t)?.[1]),
+      reviewUrl,
       holdExpiresAt: /has not answered by (\S+?), the call is refused/.exec(t)?.[1],
+      exceptionId: exceptionFromLink(reviewUrl),
     }
   }
   if (known) return { state: known.state, reasons: known.reasons }
@@ -142,14 +147,19 @@ function canonical(v: unknown): string {
  * The gateway counts an identical call as a retry only within 10 minutes;
  * here a later identical call without an id replaces the earlier entry.
  */
-export function describeCall(server: string, tool: string, input: Record<string, unknown>): Pick<KiffCall, 'key' | 'amount'> {
+export function describeCall(server: string, tool: string, input: Record<string, unknown>): Pick<KiffCall, 'key' | 'amount' | 'operationId'> {
   const op = input[OPERATION_ARG]
   const args: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(input)) if (!RESERVED.has(k)) args[k] = v
   const key = typeof op === 'string' && op !== '' ? `${server}/${tool}#op:${op}` : `${server}/${tool}#args:${canonical(args)}`
   // A guess: the first argument named like an amount.
   const amountArg = Object.keys(args).find(k => /amount/i.test(k) && (typeof args[k] === 'number' || typeof args[k] === 'string'))
-  return { key, amount: amountArg ? `${amountArg} ${String(args[amountArg])}` : undefined }
+  return {
+    key,
+    amount: amountArg ? `${amountArg} ${String(args[amountArg])}` : undefined,
+    // Only a plain id is repeated back to the agent in a prompt.
+    operationId: typeof op === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(op) ? op : undefined,
+  }
 }
 
 /** Adds an answer, or replaces the earlier answer for the same call. */
@@ -251,14 +261,121 @@ export function permissionRefused(text: string): boolean {
   return !text.replace(/^Error: /, '').startsWith('KIFF could not read your Card')
 }
 
-/** The status line: the Card, then how many calls wait for a person. */
+/**
+ * The status line. Claude Code puts the plugin's name ("kiff:") in front,
+ * so the text does not repeat it. While a call waits for a person, that is
+ * all it says, with the tool; otherwise what is left on the Card.
+ */
 export function statusLine(card: KiffCard | null, calls: readonly KiffCall[], now: number): string | undefined {
-  const waiting = calls.filter(c => c.state === 'held' && !holdEnded(c, now)).length
-  if (!card && waiting === 0) return undefined
-  const parts = ['KIFF']
-  if (card) parts.push(card.summary)
-  if (waiting > 0) parts.push(`${waiting} waiting for approval`)
-  return parts.join(' · ')
+  const waiting = waitingCalls(calls, now)
+  if (waiting.length > 0) {
+    const tools = [...new Set(waiting.map(c => c.tool))].join(', ')
+    return waiting.length === 1 ? `waiting for approval · ${tools}` : `${waiting.length} waiting for approval · ${tools}`
+  }
+  return card?.summary
+}
+
+/** Held calls the owner has not answered yet, whose wait has not ended. */
+export function waitingCalls(calls: readonly KiffCall[], now: number): KiffCall[] {
+  return calls.filter(c => c.state === 'held' && !c.answer && !holdEnded(c, now))
+}
+
+/**
+ * Held calls whose answer is still to be read through kiff_card: not yet
+ * announced, and with an exception id to ask about. A hold whose wait has
+ * passed is still asked about, so its expiry is announced too.
+ */
+export function holdsToCheck(calls: readonly KiffCall[]): KiffCall[] {
+  return calls.filter(c => c.state === 'held' && c.exceptionId && !c.announced)
+}
+
+const EXCEPTION_ID = /^exc[-_][A-Za-z0-9_-]{1,120}$/
+
+function exceptionIdOf(id: string | undefined): string | undefined {
+  return id && EXCEPTION_ID.test(id) ? id : undefined
+}
+
+/** The exception id at the end of a KIFF Cloud review link. */
+export function exceptionFromLink(url: string | undefined): string | undefined {
+  const link = reviewLink(url)
+  if (!link) return undefined
+  try {
+    return exceptionIdOf(new URL(link).pathname.split('/').pop())
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The owner's answers in a kiff_card read made with holds: by exception
+ * id, only for holds that ended. From the structured result, or the JSON
+ * text some connections hand over instead.
+ */
+export function readHolds(structured: unknown, text: string | undefined): Map<string, KiffAnswer> {
+  let body = structured
+  if (!body && text?.trimStart().startsWith('{')) {
+    try {
+      body = JSON.parse(text)
+    } catch {
+      body = undefined
+    }
+  }
+  const out = new Map<string, KiffAnswer>()
+  const holds = (body as { holds?: unknown } | undefined)?.holds
+  if (!Array.isArray(holds)) return out
+  for (const h of holds) {
+    const id = (h as { exception_id?: unknown })?.exception_id
+    const answer = answerOf((h as { status?: unknown })?.status)
+    if (typeof id === 'string' && answer) out.set(id, answer)
+  }
+  return out
+}
+
+/** A hold's status as an answer; undefined while it still waits. */
+export function answerOf(status: unknown): KiffAnswer | undefined {
+  switch (status) {
+    case 'approved':
+    case 'changed': // the Card changed so the call fits: a retry goes through
+    case 'consumed':
+      return 'approved'
+    case 'rejected':
+      return 'refused'
+    case 'expired':
+    case 'invalidated':
+      return 'expired'
+    default:
+      return undefined
+  }
+}
+
+/** The toast when the owner answered a held call. */
+export function answerToast(call: KiffCall): string {
+  const what = call.amount ? `${call.tool} (${call.amount})` : call.tool
+  return {
+    approved: `KIFF: the owner approved ${what}. The agent is told to call it again to get the result.`,
+    refused: `KIFF: the owner refused ${what}. Nothing was sent.`,
+    expired: `KIFF: ${what} was not answered in time. Nothing was sent.`,
+  }[call.answer!]
+}
+
+/**
+ * The one turn the plugin starts so the agent picks up the answer. Only
+ * the plugin's own words, the tool's name and the agent's own operation
+ * id: nothing the tool or a page wrote. It tells the agent; the agent
+ * decides whether to call again.
+ */
+export function answerPrompt(call: KiffCall): string {
+  const which = call.operationId
+    ? `the held ${call.tool} call (kiff_operation_id ${call.operationId})`
+    : `the held ${call.tool} call`
+  const again = call.operationId
+    ? `Call ${call.tool} again with the same arguments and the same kiff_operation_id to get its result; it is sent once.`
+    : `Call ${call.tool} again with the same arguments to get its result.`
+  return {
+    approved: `KIFF: the owner approved ${which}. ${again}`,
+    refused: `KIFF: the owner refused ${which}. Nothing was sent. Do not call it again unless the user asks.`,
+    expired: `KIFF: ${which} was not answered in time. Nothing was sent.`,
+  }[call.answer!]
 }
 
 /** True once a held call's waiting time has passed. */

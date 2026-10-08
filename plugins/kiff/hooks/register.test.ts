@@ -45,7 +45,7 @@ function gateway(on: On, answer: (tool: string) => { text: string; isError: bool
 }
 
 async function pane($: Engine, surface: 'terminal' | 'desktop' = 'terminal') {
-  return $.ui.mount({ plugin: 'kiff-cards-ui', surface, component: 'Pane', requestId: 'kiff', props: PANE_PROPS })
+  return $.ui.mount({ plugin: 'kiff', surface, component: 'Pane', requestId: 'kiff', props: PANE_PROPS })
 }
 
 test('a held call: the agent gets the answer unchanged, the person gets a notice', async ($, on) => {
@@ -57,7 +57,7 @@ test('a held call: the agent gets the answer unchanged, the person gets a notice
   expect(seen.toasts).toEqual([
     'KIFF is holding refund (amount 80) for approval. Nothing was sent. Answer in KIFF Cloud: https://app.kiff.dev/exceptions/exc_1',
   ])
-  expect(seen.status).toMatch(/1 waiting for approval/)
+  expect(seen.status).toBe('waiting for approval · refund')
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await pane($, surface)
@@ -88,7 +88,7 @@ test('a held call retried without an operation id: one notice, and no phantom ho
   await $.tool.call({ tool: 'mcp__kiff__refund', amount: 80, order: 'o_1' })
   await $.tool.call({ tool: 'mcp__kiff__refund', amount: 80, order: 'o_1' })
   expect(seen.toasts.length).toBe(1)
-  expect(seen.status).toMatch(/· 1 waiting for approval$/)
+  expect(seen.status).toBe('waiting for approval · refund')
   approved = true
   await $.tool.call({ tool: 'mcp__kiff__refund', amount: 80, order: 'o_1' })
   expect(seen.status ?? '').not.toMatch(/waiting/)
@@ -100,7 +100,7 @@ test('reads the Card through kiff_card only, and shows what is left', async ($, 
   await $.command.run({ command: 'kiff', args: '' } as never)
 
   expect(seen.calls.every(c => c === 'kiff/kiff_card')).toBe(true)
-  expect(seen.status).toBe('KIFF · 320 of 500 amount left today')
+  expect(seen.status).toBe('320 of 500 amount left today')
 })
 
 test('leaves other tools alone', async ($, on) => {
@@ -133,7 +133,7 @@ test('at session start, the Card is read once the gateway has connected', async 
   await clock.advance(5000)
   await clock.advance(0)
   expect(tries).toBe(2)
-  expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
+  expect(status.at(-1)).toBe('320 of 500 amount left today')
 })
 
 test("when permissions refuse the kiff_card read, it stops reading in the background", async ($, on) => {
@@ -180,7 +180,7 @@ test('after permission is granted, /kiff reads the Card and background reads res
   expect(reads).toBe(2)
   await $.tool.call({ tool: 'mcp__kiff__get_orders', customer_id: 'cus_3' })
   expect(reads).toBe(3)
-  expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
+  expect(status.at(-1)).toBe('320 of 500 amount left today')
 })
 
 test('a blocked Card read is explained once, naming the exact tool, and /kiff says the same (interactive, 2026-10-07)', async ($, on) => {
@@ -280,7 +280,7 @@ test('the thrown refusal is shown without the engine prefix (exact text from an 
   on('ui.open', () => ({ value: {} }) as never)
   on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
   on('tool.call', () => ({ deny: 'Auto mode classifier unavailable' }))
-  // The engine wraps a refusal as "HooksError: kiff-cards-ui: $.mcp.call(claude_ai_KIFF, kiff_card)
+  // The engine wraps a refusal as "HooksError: kiff: $.mcp.call(claude_ai_KIFF, kiff_card)
   // refused: <reason>", exactly as the interactive debug log showed.
   on('mcp.call', () => ({ deny: 'The server-side auto mode classifier gave no verdict for mcp__claude_ai_KIFF__kiff_card' }))
   const answer = JSON.stringify(await $.command.run({ command: 'kiff', args: '' } as never))
@@ -332,6 +332,95 @@ test('finds the gateway by name when its tools are deferred out of the tool list
   const answer = await $.command.run({ command: 'kiff', args: '' } as never)
 
   expect(tried).toEqual(['plugin_kiff-cards_kiff', 'kiff', 'claude_ai_KIFF'])
-  expect(status.at(-1)).toBe('KIFF · 320 of 500 amount left today')
+  expect(status.at(-1)).toBe('320 of 500 amount left today')
   expect(JSON.stringify(answer)).toMatch(/KIFF Card: 320 of 500 amount left today/)
 })
+
+// #1069: while a call is held, kiff_card is asked every 15 s whether the
+// owner answered. The answer is shown once and the agent is told once, in
+// a turn of its own; the held tool is never called by the plugin.
+function holdRig(on: On, statusOf: () => string) {
+  const clock = mock.clock(on, { now: NOW })
+  const seen = { toasts: [] as string[], status: undefined as string | undefined, asked: [] as unknown[], prompts: [] as string[], tools: [] as string[] }
+  on('ui.toast', (_$, e) => {
+    seen.toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', (_$, e) => {
+    seen.status = e.text
+    return { value: undefined }
+  })
+  on('command.register', () => ({ value: undefined }) as never)
+  on('session.start', () => ({ cwd: '/' }) as never)
+  on('prompt.submit', (_$, e) => {
+    seen.prompts.push(e.text)
+    return { text: e.text } as never
+  })
+  on('tool.list', () => ({ value: [{ name: 'mcp__claude_ai_KIFF__kiff_card', description: 'Shows the KIFF Card', mcp: true }] }))
+  on('mcp.call', (_$, e) => {
+    const holds = (e.args as { holds?: string[] } | undefined)?.holds
+    if (holds) seen.asked.push(holds)
+    // As the claude.ai connector sends it: the JSON as text.
+    const body = holds ? { ...CARD, holds: holds.map(id => ({ exception_id: id, action: 'refund_order', status: statusOf() })) } : CARD
+    return { value: { content: [{ type: 'text', text: JSON.stringify(body) }], isError: false } }
+  })
+  on('tool.call', (_$, e) => {
+    seen.tools.push(e.tool)
+    const text =
+      "Waiting for the owner's approval: this call is outside the agent's Card. Nothing has been sent to the tool. " +
+      'The owner can answer at https://app.kiff.dev/needs-you/exc-516a3b6bccc2d2dd8bb3. Retry the same call later to get their answer ' +
+      '(same kiff_operation_id); checking again in about 30 seconds is enough. If the owner has not answered by ' +
+      '2026-10-06T15:00:00Z, the call is refused and nothing is sent.'
+    return { result: { content: [{ type: 'text', text }] }, text, isError: true } as never
+  })
+  return { clock, seen }
+}
+
+test('while a call is held, the status line says so and kiff_card is asked about it every 15 s', async ($, on) => {
+  const { clock, seen } = holdRig(on, () => 'held')
+  await $.session.start({ cwd: '/' } as never)
+  await clock.advance(15000)
+  expect(seen.asked).toEqual([]) // nothing held: nothing asked
+  await $.tool.call({ tool: 'mcp__claude_ai_KIFF__refund_order', order_number: '70347', amount_eur: 25, kiff_operation_id: 'op-25' })
+  expect(seen.status).toBe('waiting for approval · refund_order')
+  await clock.advance(15000)
+  await clock.advance(15000)
+  expect(seen.asked).toEqual([['exc-516a3b6bccc2d2dd8bb3'], ['exc-516a3b6bccc2d2dd8bb3']])
+  expect(seen.status).toBe('waiting for approval · refund_order')
+  expect(seen.prompts).toEqual([])
+})
+
+test('once the owner approves, one toast and one turn tell the agent to call again, and only once', async ($, on) => {
+  let status = 'held'
+  const { clock, seen } = holdRig(on, () => status)
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call({ tool: 'mcp__claude_ai_KIFF__refund_order', order_number: '70347', amount_eur: 25, kiff_operation_id: 'op-25' })
+  status = 'approved'
+  await clock.advance(15000)
+  await clock.advance(15000)
+  await clock.advance(15000)
+  expect(seen.toasts.at(-1)).toBe('KIFF: the owner approved refund_order (amount_eur 25). The agent is told to call it again to get the result.')
+  expect(seen.prompts).toEqual([
+    'KIFF: the owner approved the held refund_order call (kiff_operation_id op-25). Call refund_order again with the same arguments and the same kiff_operation_id to get its result; it is sent once.',
+  ])
+  expect(seen.asked.length).toBe(1) // answered: not asked again
+  expect(seen.status).toBe('320 of 500 amount left today')
+  // The plugin called no tool itself: only the agent's own call went through tool.call.
+  expect(seen.tools).toEqual(['mcp__claude_ai_KIFF__refund_order'])
+})
+
+for (const [status, words] of [
+  ['rejected', 'KIFF: the owner refused the held refund_order call (kiff_operation_id op-25). Nothing was sent.'],
+  ['expired', 'KIFF: the held refund_order call (kiff_operation_id op-25) was not answered in time. Nothing was sent.'],
+] as const) {
+  test(`a ${status} hold is said once, with nothing sent`, async ($, on) => {
+    const { clock, seen } = holdRig(on, () => status)
+    await $.session.start({ cwd: '/' } as never)
+    await $.tool.call({ tool: 'mcp__claude_ai_KIFF__refund_order', order_number: '70347', amount_eur: 25, kiff_operation_id: 'op-25' })
+    await clock.advance(15000)
+    await clock.advance(15000)
+    expect(seen.prompts.length).toBe(1)
+    expect(seen.prompts[0]!.startsWith(words)).toBe(true)
+    expect(seen.tools).toEqual(['mcp__claude_ai_KIFF__refund_order'])
+  })
+}

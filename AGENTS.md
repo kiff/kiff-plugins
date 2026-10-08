@@ -13,9 +13,10 @@ for an admin to issue, and handle a held call.
   (`https://mcp.kiff.dev/mcp`).
 - `plugins/kiff-cards/skills/kiff/SKILL.md` and
   `plugins/kiff-cards/skills/kiff-domains/SKILL.md`: the skills.
-- `plugins/kiff-cards-ui/`: the optional display plugin (status line, held
-  call notice, `/kiff` pane). A hooks module in `hooks/`, its session-state
-  contract in `types/index.d.ts`, tests in `hooks/*.test.ts`. Display only.
+- `plugins/kiff/`: the optional plugin that shows the Card and held calls
+  (status line, held call notice, the owner's answer, `/kiff` pane). A hooks
+  module in `hooks/`, its session-state contract in `types/index.d.ts`,
+  tests in `hooks/*.test.ts`. Named `kiff-cards-ui` until 0.2.0.
 - `.github/workflows/skills-in-sync.yml`: the CI check described below.
 
 ## Skills are copies: do not edit them here
@@ -55,11 +56,14 @@ version live.
   `.claude-plugin/marketplace.json`, to the same value.
 - Run `claude plugin validate ./plugins/kiff-cards` and
   `claude plugin validate .` before opening the PR.
-- The same for `plugins/kiff-cards-ui/`: raise its `version` in its
-  `plugin.json` and in `marketplace.json`, and run
-  `claude plugin validate ./plugins/kiff-cards-ui` and
-  `claude plugin test ./plugins/kiff-cards-ui`. It must stay display only:
-  never add a hook that answers, retries or rewrites a KIFF call.
+- The same for `plugins/kiff/`: raise its `version` in its `plugin.json`
+  and in `marketplace.json`, and run `claude plugin validate ./plugins/kiff`
+  and `claude plugin test ./plugins/kiff`. It calls no KIFF tool but the
+  read-only `kiff_card`, and never answers, retries or rewrites a KIFF call.
+  The one thing it may do beyond showing is start one turn per held call,
+  once the owner answered, in its own fixed words (the tool's name and the
+  agent's own operation id, never text a tool or page wrote); the agent
+  decides whether to call again.
 - Merging to `main` is the release. Do not merge a change that is not ready
   to ship.
 

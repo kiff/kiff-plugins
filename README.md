@@ -128,25 +128,32 @@ Revoking the link ends every connection made through it.
 
 ## Optional: see the Card in Claude Code
 
-`kiff-cards-ui` is a second, optional plugin. It needs `kiff-cards` connected
-to the gateway, and a Claude Code version that runs plugin hooks modules.
+`kiff` is a second, optional plugin. It needs `kiff-cards` connected to the
+gateway, and a Claude Code version that runs plugin hooks modules. (Until
+0.2.0 it was called `kiff-cards-ui`; uninstall that one.)
 
 ```text
-/plugin install kiff-cards-ui@kiff
+/plugin install kiff@kiff
 ```
 
 - **Status line:** what is left on the agent's Card, for example
-  `KIFF · 320 of 500 amount left today · 1 waiting for approval`.
+  `kiff: 320 of 500 amount left today`. While a call waits for a person it
+  says that instead: `kiff: waiting for approval · refund_order`.
 - **A notice when KIFF holds a call:** what was held, that nothing was sent,
   and the link where a person answers it in KIFF Cloud.
+- **When the owner answers:** while a call is held, the plugin asks the
+  gateway's read-only `kiff_card` about it every 15 seconds. Once the owner
+  approves or refuses it, or the wait ends, it shows one notice and starts
+  one turn telling the agent (Claude Code runs it when the session is idle,
+  never in the middle of a turn). On an approval the agent is told to call
+  again with the same `kiff_operation_id`; that call gets the result.
 - **`/kiff`:** a pane with this session's KIFF calls and what KIFF answered:
-  allowed, waiting for approval, refused, or outcome unknown.
+  allowed, waiting for approval, approved, refused, or outcome unknown.
 
-It only displays. It reads what the gateway already answered and the
-gateway's read-only `kiff_card` tool. It never answers, retries or changes a
-call, so a held call keeps waiting for a person in KIFF Cloud, and only the
-agent's own retry of the same call gets their answer. If it fails, calls go
-on as they would without it: the gateway enforces the Card either way.
+It never answers, retries or changes a call. A held call waits for a person
+in KIFF Cloud, and only the agent's own retry of the same call gets their
+answer and is sent, once. If the plugin fails, calls go on as they would
+without it: the gateway enforces the Card either way.
 
 The status line reads the Card with the gateway's read-only `kiff_card`
 tool, which Claude Code's permissions cover like any other tool. A plugin
