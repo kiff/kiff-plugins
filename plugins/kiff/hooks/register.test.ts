@@ -203,7 +203,7 @@ test('a blocked Card read is explained once, naming the exact tool, and /kiff sa
   await $.command.run({ command: 'kiff', args: '' } as never)
 
   const explained =
-    "KIFF Cards UI can't read your Card (Denied by the auto mode classifier: classifier unavailable). If Claude Code blocked it, type /kiff to be asked, or in /permissions → Allow, add the rule mcp__claude_ai_KIFF__kiff_card (just that name), saved under User settings so it applies in every folder."
+    "KIFF can't read your Card (Denied by the auto mode classifier: classifier unavailable). If Claude Code blocked it, type /kiff to be asked, or in /permissions → Allow, add the rule mcp__claude_ai_KIFF__kiff_card (just that name), saved under User settings so it applies in every folder."
   expect(toasts).toEqual([NOTICE])
   expect(JSON.stringify(answer)).toContain(explained)
 })
@@ -339,7 +339,8 @@ test('finds the gateway by name when its tools are deferred out of the tool list
 // #1069: while a call is held, kiff_card is asked every 15 s whether the
 // owner answered. The answer is shown once and the agent is told once, in
 // a turn of its own; the held tool is never called by the plugin.
-type HoldWorld = { status: (id: string) => string; refuse: boolean }
+// unreported: KIFF leaves every asked hold out, as a gateway without holds would.
+type HoldWorld = { status: (id: string) => string; refuse: boolean; unreported?: boolean }
 function holdRig(on: On, world: HoldWorld) {
   const clock = mock.clock(on, { now: NOW })
   const seen = { toasts: [] as string[], status: undefined as string | undefined, asked: [] as string[][], prompts: [] as string[], tools: [] as string[] }
@@ -368,7 +369,7 @@ function holdRig(on: On, world: HoldWorld) {
       }
     }
     // As the claude.ai connector sends it: the JSON as text.
-    const body = holds ? { ...CARD, holds: holds.map(id => ({ exception_id: id, action: 'refund_order', status: world.status(id) })) } : CARD
+    const body = holds && !world.unreported ? { ...CARD, holds: holds.map(id => ({ exception_id: id, action: 'refund_order', status: world.status(id) })) } : CARD
     return { value: { content: [{ type: 'text', text: JSON.stringify(body) }], isError: false } }
   })
   on('tool.call', (_$, e) => {
@@ -424,7 +425,8 @@ test('once the owner approves, one toast and one turn tell the agent to call aga
 
 for (const [status, words] of [
   ['rejected', 'KIFF: the owner refused the held refund_order call (kiff_operation_id op-25, KIFF hold exc-op-25). Nothing was sent.'],
-  ['expired', 'KIFF: the held refund_order call (kiff_operation_id op-25, KIFF hold exc-op-25) was not answered in time. Nothing was sent.'],
+  ['expired', 'KIFF: the hold on the held refund_order call (kiff_operation_id op-25, KIFF hold exc-op-25) ended without approval. Nothing was sent.'],
+  ['invalidated', 'KIFF: the hold on the held refund_order call (kiff_operation_id op-25, KIFF hold exc-op-25) ended without approval. Nothing was sent.'],
 ] as const) {
   test(`a ${status} hold is said once, with nothing sent`, async ($, on) => {
     const { clock, seen } = holdRig(on, { status: () => status, refuse: false })
@@ -451,10 +453,10 @@ test('an approval for a call without kiff_operation_id, seen after the 10 minute
   await clock.advance(15000)
   expect(seen.prompts.length).toBe(1)
   expect(seen.prompts[0]).toBe(
-    'KIFF: the owner approved the held refund_order call (KIFF hold exc-70348). It was made without a kiff_operation_id, so calling refund_order again now may count as a new call rather than this approved one. Check its outcome in KIFF Cloud (Needs you) before calling it again.',
+    'KIFF: the owner approved the held refund_order call (KIFF hold exc-70348). It was made without a kiff_operation_id, so calling refund_order again now may count as a new call rather than this approved one. Ask the user to check it in KIFF Cloud (Needs you) before calling it again.',
   )
   expect(seen.prompts[0]).not.toMatch(/same arguments/)
-  expect(seen.toasts.at(-1)).toMatch(/check it in KIFF Cloud before calling again/)
+  expect(seen.toasts.at(-1)).toMatch(/ask you to check it in KIFF Cloud before calling again/)
 })
 
 // Review on #12 at 70117f7: a whitespace-only id is no id to the gateway,
@@ -516,4 +518,23 @@ test('more than 20 held calls are all asked about, and an answer past the first 
   expect(seen.prompts.length).toBe(1)
   expect(seen.prompts[0]).toMatch(/kiff_operation_id op-22/)
   expect(seen.status).toBe('21 waiting for approval · refund_order')
+})
+
+// Review on #12 at ca277b0 (blocking): KIFF leaves out a hold it does not
+// report (a gateway without holds, another agent's id, a purged hold).
+// Such a hold is asked about until its expiry plus a grace, then ends
+// locally with no answer and no turn.
+test('a hold KIFF never reports stops being asked about after its expiry, and ends with no turn', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'held', refuse: false, unreported: true })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-25')) // holdRig's hold expires at 2026-10-06T15:00:00Z, an hour after NOW
+  await clock.advance(60 * 60 * 1000) // to the expiry: still asked about during the grace
+  const asked = seen.asked.length
+  expect(asked).toBeGreaterThan(200)
+  await clock.advance(3 * 60 * 1000) // past expiry + 2 min
+  const after = seen.asked.length
+  await clock.advance(60 * 60 * 1000)
+  expect(seen.asked.length).toBe(after) // no more reads
+  expect(seen.prompts).toEqual([])
+  expect(seen.status).toBe('320 of 500 amount left today')
 })

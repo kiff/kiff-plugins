@@ -3,6 +3,8 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   answerOf,
   answerPrompt,
+  checkEnded,
+  MAX_HOLD_MS,
   describeCall,
   exceptionFromLink,
   formatScaled,
@@ -307,7 +309,7 @@ describe('held calls and their answers (#1069)', () => {
       { ...base, key: 'c', exceptionId: 'exc-c', announced: true },
       { ...base, key: 'd', state: 'allowed' as const, exceptionId: 'exc-d' },
     ]
-    expect(holdsToCheck(calls).map(c => c.key)).toEqual(['a'])
+    expect(holdsToCheck(calls, 0).map(c => c.key)).toEqual(['a'])
   })
   test('only a call with an operation id is told to call again (review on #12)', () => {
     const call = { key: 'k', tool: 'refund', state: 'held' as const, at: 1, answer: 'approved' as const, exceptionId: 'exc-1' }
@@ -315,5 +317,22 @@ describe('held calls and their answers (#1069)', () => {
     expect(answerPrompt(call)).toMatch(/may count as a new call/)
     expect(answerPrompt({ ...call, hasOperationId: true })).toMatch(/the same kiff_operation_id you used for it/)
     expect(answerPrompt({ ...call, hasOperationId: true, operationId: 'op-1' })).toMatch(/kiff_operation_id op-1, KIFF hold exc-1/)
+  })
+})
+
+describe('bounded hold checks (review on #12 at ca277b0)', () => {
+  const base = { key: 'k', tool: 'refund', state: 'held' as const, at: 0, exceptionId: 'exc-1' }
+  test('with an expiry: asked about until it plus 2 minutes', () => {
+    const call = { ...base, holdExpiresAt: '1970-01-01T01:00:00Z' }
+    expect(holdsToCheck([call], 3600_000 + 119_000).length).toBe(1)
+    expect(holdsToCheck([call], 3600_000 + 120_000).length).toBe(0)
+    expect(checkEnded(call, 3600_000 + 120_000)).toBe(true)
+  })
+  test('without an expiry: asked about for the longest hold, 7 days', () => {
+    expect(holdsToCheck([base], MAX_HOLD_MS - 1).length).toBe(1)
+    expect(holdsToCheck([base], MAX_HOLD_MS).length).toBe(0)
+  })
+  test('an answered call is not ended by the bound', () => {
+    expect(checkEnded({ ...base, answer: 'approved' as const }, MAX_HOLD_MS * 2)).toBe(false)
   })
 })

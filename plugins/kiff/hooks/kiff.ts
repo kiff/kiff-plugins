@@ -287,13 +287,32 @@ export function waitingCalls(calls: readonly KiffCall[], now: number): KiffCall[
   return calls.filter(c => c.state === 'held' && !c.answer && !holdEnded(c, now))
 }
 
+/** How long past its expiry a hold is still asked about, for the answer to land. */
+export const HOLD_GRACE_MS = 2 * 60 * 1000
+/** The longest a hold can wait (a Card's hold expiry is at most 7 days). */
+export const MAX_HOLD_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * True once a held call is no longer asked about, answer or not: its expiry
+ * plus a grace has passed, or, with no expiry known, the longest hold since
+ * it was seen. Bounds the reads when KIFF never reports the hold (a gateway
+ * without holds, another agent's id, a purged hold). It ends with no
+ * answer: shown as a wait that ended, and the agent gets no turn.
+ */
+export function checkEnded(call: KiffCall, now: number): boolean {
+  if (call.state !== 'held' || call.answer) return false
+  const expires = call.holdExpiresAt ? Date.parse(call.holdExpiresAt) : NaN
+  return Number.isNaN(expires) ? now >= call.at + MAX_HOLD_MS : now >= expires + HOLD_GRACE_MS
+}
+
 /**
  * Held calls whose answer is still to be read through kiff_card: not yet
- * announced, and with an exception id to ask about. A hold whose wait has
- * passed is still asked about, so its expiry is announced too.
+ * announced, with an exception id to ask about, and not past checkEnded. A
+ * hold whose wait just passed is still asked about for the grace, so its
+ * expiry is announced too.
  */
-export function holdsToCheck(calls: readonly KiffCall[]): KiffCall[] {
-  return calls.filter(c => c.state === 'held' && c.exceptionId && !c.announced)
+export function holdsToCheck(calls: readonly KiffCall[], now: number): KiffCall[] {
+  return calls.filter(c => c.state === 'held' && c.exceptionId && !c.announced && !checkEnded(c, now))
 }
 
 const EXCEPTION_ID = /^exc[-_][A-Za-z0-9_-]{1,120}$/
@@ -361,9 +380,9 @@ export function answerToast(call: KiffCall): string {
   return {
     approved: call.hasOperationId
       ? `KIFF: the owner approved ${what}. The agent is told to call it again to get the result.`
-      : `KIFF: the owner approved ${what}. It had no kiff_operation_id, so the agent is told to check it in KIFF Cloud before calling again.`,
+      : `KIFF: the owner approved ${what}. It had no kiff_operation_id, so the agent is told to ask you to check it in KIFF Cloud before calling again.`,
     refused: `KIFF: the owner refused ${what}. Nothing was sent.`,
-    expired: `KIFF: ${what} was not answered in time. Nothing was sent.`,
+    expired: `KIFF: the hold on ${what} ended without approval. Nothing was sent.`,
   }[call.answer!]
 }
 
@@ -386,11 +405,11 @@ export function answerPrompt(call: KiffCall): string {
     ? `Call ${call.tool} again with the same arguments and the same kiff_operation_id to get its result; it is sent once.`
     : call.hasOperationId
       ? `Call ${call.tool} again with the same arguments and the same kiff_operation_id you used for it to get its result; it is sent once.`
-      : `It was made without a kiff_operation_id, so calling ${call.tool} again now may count as a new call rather than this approved one. Check its outcome in KIFF Cloud (Needs you) before calling it again.`
+      : `It was made without a kiff_operation_id, so calling ${call.tool} again now may count as a new call rather than this approved one. Ask the user to check it in KIFF Cloud (Needs you) before calling it again.`
   return {
     approved: `KIFF: the owner approved ${which}. ${again}`,
     refused: `KIFF: the owner refused ${which}. Nothing was sent. Do not call it again unless the user asks.`,
-    expired: `KIFF: ${which} was not answered in time. Nothing was sent.`,
+    expired: `KIFF: the hold on ${which} ended without approval. Nothing was sent.`,
   }[call.answer!]
 }
 

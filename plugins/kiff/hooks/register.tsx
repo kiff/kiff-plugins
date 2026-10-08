@@ -21,6 +21,7 @@ import {
   describeCall,
   heldToast,
   holdEnded,
+  checkEnded,
   holdsToCheck,
   kiffTool,
   permissionRefused,
@@ -85,7 +86,7 @@ let cardReadError = ''
 async function refusalText($: Engine): Promise<string> {
   const tool = await cardToolName($)
   const why = cardReadError ? ` (${cardReadError})` : ''
-  return `KIFF Cards UI can't read your Card${why}. If Claude Code blocked it, type /kiff to be asked, or in /permissions → Allow, add the rule ${tool} (just that name), saved under User settings so it applies in every folder.`
+  return `KIFF can't read your Card${why}. If Claude Code blocked it, type /kiff to be asked, or in /permissions → Allow, add the rule ${tool} (just that name), saved under User settings so it applies in every folder.`
 }
 
 /** The one-line notice: the action first, since a terminal cuts the line short. */
@@ -194,7 +195,7 @@ let checking = false
  */
 async function checkHolds($: Engine) {
   if (checking || cardReadRefused) return
-  const pending = holdsToCheck(await read($, calls))
+  const pending = holdsToCheck(await read($, calls), await $.clock.now())
   if (pending.length === 0) return
   checking = true
   try {
@@ -383,7 +384,7 @@ const COLORS: Record<KiffCall['state'], 'success' | 'warning' | 'error' | 'subtl
 function label(call: KiffCall, now: number): string {
   if (call.answer === 'approved') return 'approved'
   if (call.answer === 'refused') return 'refused by the owner'
-  if (call.answer === 'expired' || holdEnded(call, now)) return 'wait ended'
+  if (call.answer === 'expired' || holdEnded(call, now) || checkEnded(call, now)) return 'wait ended'
   return {
     allowed: 'allowed',
     held: 'waiting for approval',
@@ -399,7 +400,7 @@ function label(call: KiffCall, now: number): string {
 function detail(call: KiffCall, now: number): string {
   if (call.answer === 'approved') return 'The agent was told to call it again; that call gets the result.'
   if (call.answer === 'refused') return 'Nothing sent.'
-  if (holdEnded(call, now) || call.answer === 'expired') return "If no one answered, the call was refused. The agent's retry of the same call shows the answer."
+  if (holdEnded(call, now) || checkEnded(call, now) || call.answer === 'expired') return "If no one answered, the call was refused. The agent's retry of the same call shows the answer."
   if (call.state === 'held') return call.holdExpiresAt ? `Nothing sent. Waits until ${call.holdExpiresAt}.` : 'Nothing sent.'
   if (call.state === 'refused') return `Nothing sent.${call.reasons ? ` ${call.reasons.join(', ')}` : ''}`
   if (call.state === 'unknown') return 'KIFF cannot tell whether the tool received it. Check the tool before trying again.'
