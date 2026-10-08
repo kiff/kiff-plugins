@@ -340,7 +340,17 @@ test('finds the gateway by name when its tools are deferred out of the tool list
 // owner answered. The answer is shown once and the agent is told once, in
 // a turn of its own; the held tool is never called by the plugin.
 // unreported: KIFF leaves every asked hold out, as a gateway without holds would.
-type HoldWorld = { status: (id: string) => string; refuse: boolean; unreported?: boolean }
+// expires: when the rig's holds stop waiting (an hour after NOW unless set).
+// pageSize: how many calls one kiff_pending page lists (all unless set).
+// offline: kiff_pending fails as KIFF does when it cannot be read.
+type HoldWorld = {
+  status: (id: string) => string
+  refuse: boolean
+  unreported?: boolean
+  expires?: string
+  pageSize?: number
+  offline?: boolean
+}
 function holdRig(on: On, world: HoldWorld) {
   const clock = mock.clock(on, { now: NOW })
   const seen = { toasts: [] as string[], status: undefined as string | undefined, asked: [] as string[][], prompts: [] as string[], tools: [] as string[] }
@@ -370,11 +380,20 @@ function holdRig(on: On, world: HoldWorld) {
       if (world.refuse) {
         return { value: { content: [{ type: 'text', text: 'Permission to use mcp__claude_ai_KIFF__kiff_pending has been denied.' }], isError: true } }
       }
-      const calls = world.unreported
+      if (world.offline) {
+        return { value: { content: [{ type: 'text', text: 'KIFF could not read your Card just now.' }], isError: true } }
+      }
+      const all = world.unreported
         ? []
         : held.map(h => ({ tool: 'refund_order', state: 'held', exception_id: h.id, answer: words[world.status(h.id)] ?? world.status(h.id), kiff_operation_id: h.op }))
+      // Newest first, a page at a time, as the gateway pages.
+      all.reverse()
+      const from = Number((e.args as { cursor?: string } | undefined)?.cursor?.slice(1) ?? 0)
+      const size = world.pageSize ?? all.length
+      const calls = all.slice(from, from + size)
+      const next = from + size < all.length ? `p${from + size}` : undefined
       // As the claude.ai connector sends it: the JSON as text.
-      return { value: { content: [{ type: 'text', text: JSON.stringify({ calls }) }], isError: false } }
+      return { value: { content: [{ type: 'text', text: JSON.stringify({ calls, next_cursor: next }) }], isError: false } }
     }
     return { value: { content: [{ type: 'text', text: JSON.stringify(CARD) }], isError: false } }
   })
@@ -390,7 +409,7 @@ function holdRig(on: On, world: HoldWorld) {
       "Waiting for the owner's approval: this call is outside the agent's Card. Nothing has been sent to the tool. " +
       `The owner can answer at https://app.kiff.dev/needs-you/${id}. Retry the same call later to get their answer ` +
       '(same kiff_operation_id); checking again in about 30 seconds is enough. If the owner has not answered by ' +
-      '2026-10-06T15:00:00Z, the call is refused and nothing is sent.'
+      `${world.expires ?? '2026-10-06T15:00:00Z'}, the call is refused and nothing is sent.`
     return { result: { content: [{ type: 'text', text }] }, text, isError: true } as never
   })
   return { clock, seen }
@@ -535,16 +554,67 @@ test('more than 20 held calls are all asked about, and an answer past the first 
 // Such a hold is asked about until its expiry plus a grace, then ends
 // locally with no answer and no turn.
 test('a hold KIFF never reports stops being asked about after its expiry, and ends with no turn', async ($, on) => {
-  const { clock, seen } = holdRig(on, { status: () => 'held', refuse: false, unreported: true })
+  // The hold expires 30 s after NOW, so the test takes a few ticks, not an
+  // hour of them (it timed out in review on #12).
+  const { clock, seen } = holdRig(on, { status: () => 'held', refuse: false, unreported: true, expires: '2026-10-06T14:00:30Z' })
   await $.session.start({ cwd: '/' } as never)
-  await $.tool.call(refund('op-25')) // holdRig's hold expires at 2026-10-06T15:00:00Z, an hour after NOW
-  await clock.advance(60 * 60 * 1000) // to the expiry: still asked about during the grace
-  const asked = seen.asked.length
-  expect(asked).toBeGreaterThan(200)
-  await clock.advance(3 * 60 * 1000) // past expiry + 2 min
+  await $.tool.call(refund('op-25'))
+  await clock.advance(30_000) // to the expiry: still asked about during the grace
+  expect(seen.asked.length).toBe(2)
+  await clock.advance(135_000) // past expiry + 2 min: one last read, then none
   const after = seen.asked.length
-  await clock.advance(60 * 60 * 1000)
+  await clock.advance(10 * 60 * 1000)
   expect(seen.asked.length).toBe(after) // no more reads
   expect(seen.prompts).toEqual([])
   expect(seen.status).toBe('320 of 500 amount left today')
+})
+
+// Review on #12 at 1cf45a6: the owner approved in time, but the plugin
+// could not read until after the hold's expiry plus the grace (here a
+// refusal, recovered with /kiff). The approval is still applied: one
+// notice and one turn, with KIFF's key for a call made without an id.
+test('an approval read late, after a refusal is recovered with /kiff, still counts', async ($, on) => {
+  const world: HoldWorld = { status: () => 'approved', refuse: true, expires: '2026-10-06T14:00:30Z' }
+  const { clock, seen } = holdRig(on, world)
+  await $.session.start({ cwd: '/' } as never)
+  await clock.settle()
+  await $.tool.call(refund(undefined, '70350'))
+  await clock.advance(15000) // refused: reads stop
+  await clock.advance(5 * 60 * 1000) // well past expiry + 2 min
+  expect(seen.prompts).toEqual([])
+  world.refuse = false
+  await $.command.run({ command: 'kiff', args: '' } as never)
+  // The turn runs once the command is done and the session idle.
+  await clock.advance(15000)
+  expect(seen.prompts).toEqual([
+    'KIFF: the owner approved the held refund_order call (KIFF hold exc-70350). It was made without a kiff_operation_id: call refund_order again with the same arguments and kiff_operation_id tc-0123456789abcdef0123456789abcdef01234567 to get its result; it is sent once.',
+  ])
+  expect(seen.toasts.filter(t => t.includes('approved')).length).toBe(1)
+})
+
+// The same after an outage (KIFF could not be read, a machine asleep): past
+// the bound, a hold gets one last read, and the answer it reports counts.
+test('an approval read after an outage past the bound still counts, once', async ($, on) => {
+  const world: HoldWorld = { status: () => 'approved', refuse: false, offline: true, expires: '2026-10-06T14:00:30Z' }
+  const { clock, seen } = holdRig(on, world)
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-26'))
+  await clock.advance(5 * 60 * 1000) // offline past expiry + 2 min
+  world.offline = false
+  await clock.advance(15000)
+  await clock.advance(15000)
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.prompts[0]).toMatch(/kiff_operation_id op-26/)
+})
+
+// Review on kiff-cloud#1077: kiff_pending pages; a hold on a later page is
+// still found and announced.
+test('a hold on a later kiff_pending page is found', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: id => (id === 'exc-op-1' ? 'approved' : 'held'), refuse: false, pageSize: 2 })
+  await $.session.start({ cwd: '/' } as never)
+  for (let i = 1; i <= 5; i++) await $.tool.call(refund(`op-${i}`, `o-${i}`))
+  await clock.advance(15000)
+  expect(seen.asked.length).toBe(3) // pages of 2, 2 and 1: op-1 is the oldest, on the last
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.prompts[0]).toMatch(/kiff_operation_id op-1,/)
 })

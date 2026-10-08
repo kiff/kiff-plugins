@@ -42,6 +42,11 @@ export type KiffCall = {
   answer?: KiffAnswer
   /** True once the answer was shown and the agent was told, so only once. */
   announced?: boolean
+  /**
+   * True once a hold past its bound (checkEnded) got its one last read.
+   * After that it is asked about only when the person types /kiff.
+   */
+  finalChecked?: boolean
   /** Milliseconds since the epoch of the latest answer. */
   at: number
 }

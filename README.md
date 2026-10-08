@@ -148,8 +148,9 @@ gateway, and a Claude Code version that runs plugin hooks modules. (Until
   telling the agent (Claude Code runs it when the session is idle, never in
   the middle of a turn). On an approval the agent is told to call again with
   the same `kiff_operation_id`, or, for a call made without one, with the id
-  KIFF lists for it; that call gets the result, sent once. It stops asking
-  about a hold two minutes after it expires.
+  KIFF lists for it; that call gets the result, sent once. Two minutes
+  after a hold expires it asks about it once more, then only when you type
+  `/kiff`; an answer it reads, however late, is always applied.
 - **`/kiff`:** a pane with this session's KIFF calls and what KIFF answered:
   allowed, waiting for approval, approved, refused, or outcome unknown.
 

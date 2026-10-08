@@ -14,6 +14,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, McpToolResult, Register } from 'claude-code'
 
 import type { KiffCall, KiffCard } from '../types'
+import type { PendingHold } from './kiff'
 import {
   answerPrompt,
   answerToast,
@@ -24,6 +25,7 @@ import {
   checkEnded,
   holdsToCheck,
   kiffTool,
+  unanswered,
   permissionRefused,
   PENDING_TOOL,
   readAnswer,
@@ -37,6 +39,8 @@ import {
 const PANE = 'kiff'
 // How often a held call's answer is asked for, only while one is held.
 const HOLD_CHECK_MS = 15000
+// The most kiff_pending pages one check reads (50 calls each).
+const MAX_PENDING_PAGES = 10
 
 const calls = atom({ plugin: 'kiff', key: 'calls' } as const, [] as KiffCall[])
 const card = atom({ plugin: 'kiff', key: 'card' } as const, null as KiffCard | null)
@@ -129,11 +133,11 @@ async function callCard($: Engine): Promise<McpToolResult | null> {
 }
 
 /** Calls one of the gateway's own read-only tools (kiff_card, kiff_pending). */
-async function callGatewayTool($: Engine, tool: string): Promise<McpToolResult | null> {
+async function callGatewayTool($: Engine, tool: string, args: Record<string, unknown> = {}): Promise<McpToolResult | null> {
   const name = await findServer($)
   if (name) {
     try {
-      return await $.mcp.call(name, tool, {})
+      return await $.mcp.call(name, tool, args)
     } catch (err) {
       if (!NOT_CONNECTED.test(String(err))) return thrownResult(err)
       // Listed but not answering: the connector is still connecting, so let
@@ -148,7 +152,7 @@ async function callGatewayTool($: Engine, tool: string): Promise<McpToolResult |
   for (const candidate of KNOWN_SERVERS) {
     let res: McpToolResult
     try {
-      res = await $.mcp.call(candidate, tool, {})
+      res = await $.mcp.call(candidate, tool, args)
     } catch (err) {
       if (NOT_CONNECTED.test(String(err))) continue // no such server here
       res = thrownResult(err) // the server is there; the read was blocked or failed
@@ -223,33 +227,62 @@ async function pendingRefusalNotice($: Engine): Promise<string> {
  */
 async function checkHolds($: Engine, asked = false) {
   if (checking || (pendingReadRefused && !asked)) return
-  if (holdsToCheck(await read($, calls), await $.clock.now()).length === 0) return
+  const wanted = holdsToCheck(await read($, calls), await $.clock.now(), asked)
+  if (wanted.length === 0) return
   checking = true
   try {
-    const res = await callGatewayTool($, PENDING_TOOL)
-    if (!res) return
-    if (res.isError) {
-      await pendingReadFailed($, res)
-      return
+    // Page through kiff_pending until every hold asked about is found, or
+    // the pages run out (review on kiff-cloud#1077: none is left out).
+    const listed = new Map<string, PendingHold>()
+    const missing = new Set(wanted.map(c => c.exceptionId!))
+    let cursor: string | undefined
+    for (let page = 0; page < MAX_PENDING_PAGES; page++) {
+      const res = await callGatewayTool($, PENDING_TOOL, cursor ? { cursor } : {})
+      if (!res) return
+      if (res.isError) {
+        await pendingReadFailed($, res)
+        return
+      }
+      pendingReadRefused = false
+      const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
+      const pageRead = readPending(res.structuredContent, text)
+      for (const [id, p] of pageRead.holds) {
+        listed.set(id, p)
+        missing.delete(id)
+      }
+      cursor = pageRead.next
+      if (missing.size === 0 || !cursor) break
     }
-    pendingReadRefused = false
-    const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
-    const listed = readPending(res.structuredContent, text)
     const now = await $.clock.now()
     const told: KiffCall[] = []
     await update($, calls, list =>
       list.map(c => {
-        if (c.state !== 'held' || !c.exceptionId || c.announced || checkEnded(c, now)) return c
+        if (c.state !== 'held' || !c.exceptionId || c.announced) return c
+        // An answer kiff_pending reports always counts, however late it is
+        // read (review on #12): an approval given in time stands.
         const p = listed.get(c.exceptionId)
-        if (!p?.answer) return c
-        const done = { ...c, answer: p.answer, collectId: c.hasOperationId ? undefined : p.collectId, announced: true }
-        told.push(done)
-        return done
+        if (p?.answer) {
+          const done = { ...c, answer: p.answer, collectId: c.hasOperationId ? undefined : p.collectId, announced: true }
+          told.push(done)
+          return done
+        }
+        // Past its bound with no answer: that was its last read.
+        return checkEnded(c, now) ? { ...c, finalChecked: true } : c
       }),
     )
     for (const call of told) {
       $.ui.toast(answerToast(call), { timeoutMs: 12000 })
-      void $.prompt.submit({ text: answerPrompt(call) }).catch(() => {})
+      const text = answerPrompt(call)
+      if (asked) {
+        // Read by /kiff: a turn cannot be submitted from the command's own
+        // hook (the host refuses it, as it would wait on the turn the hook
+        // holds), so it goes from a timer just after.
+        $.clock.after(1, () => {
+          void $.prompt.submit({ text }).catch(() => {})
+        })
+      } else {
+        void $.prompt.submit({ text }).catch(() => {})
+      }
     }
   } finally {
     checking = false
@@ -283,12 +316,15 @@ async function askForCard($: Engine) {
  */
 async function askForPending($: Engine) {
   const name = await read($, server)
-  if (!name || holdsToCheck(await read($, calls), await $.clock.now()).length === 0) return
+  if (!name || unanswered(await read($, calls)).length === 0) return
   const ran = await $.tool.call({
     tool: `mcp__${name}__${PENDING_TOOL}`,
     consent: 'The user typed /kiff to see whether held KIFF calls were answered.',
   })
-  if (ran.deny === undefined && !ran.isError) pendingReadRefused = false
+  if (ran.deny !== undefined || ran.isError) return
+  // Allowed now: read again, and apply what it says.
+  pendingReadRefused = false
+  await checkHolds($, true)
 }
 
 /** Reads the Card once the gateway has connected: a few tries, 5 s apart. */

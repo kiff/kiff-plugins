@@ -307,14 +307,21 @@ export function checkEnded(call: KiffCall, now: number): boolean {
   return Number.isNaN(expires) ? now >= call.at + MAX_HOLD_MS : now >= expires + HOLD_GRACE_MS
 }
 
+/** Held calls whose answer is not known yet: not announced, with KIFF's hold id. */
+export function unanswered(calls: readonly KiffCall[]): KiffCall[] {
+  return calls.filter(c => c.state === 'held' && c.exceptionId && !c.announced)
+}
+
 /**
- * Held calls whose answer is still to be read through kiff_card: not yet
- * announced, with an exception id to ask about, and not past checkEnded. A
- * hold whose wait just passed is still asked about for the grace, so its
- * expiry is announced too.
+ * Held calls to ask kiff_pending about now. Within its bound (checkEnded)
+ * a hold is asked about on every tick. Past it, once more (finalChecked),
+ * so an answer given in time is still learned after the plugin could not
+ * read for a while (a refusal, an outage, a machine asleep); after that
+ * only when the person asks (/kiff). The bound only stops the asking: an
+ * answer kiff_pending reports is always applied (review on #12).
  */
-export function holdsToCheck(calls: readonly KiffCall[], now: number): KiffCall[] {
-  return calls.filter(c => c.state === 'held' && c.exceptionId && !c.announced && !checkEnded(c, now))
+export function holdsToCheck(calls: readonly KiffCall[], now: number, asked = false): KiffCall[] {
+  return unanswered(calls).filter(c => asked || !checkEnded(c, now) || !c.finalChecked)
 }
 
 const EXCEPTION_ID = /^exc[-_][A-Za-z0-9_-]{1,120}$/
@@ -345,13 +352,20 @@ export type PendingHold = {
 /** KIFF's own key for a call, as kiff_pending lists one made without an id. */
 const KIFF_KEY = /^tc-[0-9a-f]{40}$/
 
+/** A cursor kiff_pending handed out: passed back only to kiff_pending. */
+const CURSOR = /^[A-Za-z0-9_-]{1,200}$/
+
+/** One kiff_pending read: its held calls, and where the next page starts. */
+export type PendingRead = { holds: Map<string, PendingHold>; next?: string }
+
 /**
- * The held calls in a kiff_pending read, by exception id. From the
- * structured result, or the JSON text some connections hand over instead.
- * Only KIFF's own words are taken: the answer, the hold id, and a key of
- * KIFF's form; never the tool's arguments or the agent's own id.
+ * The held calls in a kiff_pending read, by exception id, and its
+ * next_cursor. From the structured result, or the JSON text some
+ * connections hand over instead. Only KIFF's own words are taken: the
+ * answer, the hold id, a key of KIFF's form and the cursor; never the
+ * tool's arguments or the agent's own id.
  */
-export function readPending(structured: unknown, text: string | undefined): Map<string, PendingHold> {
+export function readPending(structured: unknown, text: string | undefined): PendingRead {
   let body = structured
   if (!body && text?.trimStart().startsWith('{')) {
     try {
@@ -361,15 +375,17 @@ export function readPending(structured: unknown, text: string | undefined): Map<
     }
   }
   const out = new Map<string, PendingHold>()
-  const calls = (body as { calls?: unknown } | undefined)?.calls
-  if (!Array.isArray(calls)) return out
+  const page = body as { calls?: unknown; next_cursor?: unknown } | undefined
+  const next = typeof page?.next_cursor === 'string' && CURSOR.test(page.next_cursor) ? page.next_cursor : undefined
+  const calls = page?.calls
+  if (!Array.isArray(calls)) return { holds: out, next }
   for (const c of calls) {
     const e = c as { state?: unknown; exception_id?: unknown; answer?: unknown; kiff_operation_id?: unknown }
     if (e?.state !== 'held' || typeof e.exception_id !== 'string') continue
     const op = typeof e.kiff_operation_id === 'string' && KIFF_KEY.test(e.kiff_operation_id) ? e.kiff_operation_id : undefined
     out.set(e.exception_id, { answer: answerOf(e.answer), collectId: op })
   }
-  return out
+  return { holds: out, next }
 }
 
 /** kiff_pending's answer for a held call; undefined while it still waits. */

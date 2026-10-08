@@ -308,9 +308,12 @@ describe('held calls and their answers (#1069)', () => {
       ['exc-1', { answer: 'approved', collectId: key }],
       ['exc-2', { answer: undefined, collectId: undefined }],
     ]
-    expect([...readPending(body, undefined)]).toEqual(want)
-    expect([...readPending(undefined, JSON.stringify(body))]).toEqual(want)
-    expect(readPending(undefined, 'Your pending KIFF calls').size).toBe(0)
+    expect([...readPending(body, undefined).holds]).toEqual(want)
+    expect([...readPending(undefined, JSON.stringify(body)).holds]).toEqual(want)
+    expect(readPending(undefined, 'Your pending KIFF calls').holds.size).toBe(0)
+    // next_cursor is KIFF's, passed back only to kiff_pending; anything else is dropped.
+    expect(readPending({ calls: [], next_cursor: 'MTc5MXx0Yy0x' }, undefined).next).toBe('MTc5MXx0Yy0x')
+    expect(readPending({ calls: [], next_cursor: 'not a cursor!' }, undefined).next).toBeUndefined()
   })
   test('only unannounced holds with an id are asked about', () => {
     const base = { key: 'k', tool: 'refund', state: 'held' as const, at: 1 }
@@ -333,15 +336,18 @@ describe('held calls and their answers (#1069)', () => {
 
 describe('bounded hold checks (review on #12 at ca277b0)', () => {
   const base = { key: 'k', tool: 'refund', state: 'held' as const, at: 0, exceptionId: 'exc-1' }
-  test('with an expiry: asked about until it plus 2 minutes', () => {
+  test('with an expiry: asked about until it plus 2 minutes, then once more, then only when asked', () => {
     const call = { ...base, holdExpiresAt: '1970-01-01T01:00:00Z' }
     expect(holdsToCheck([call], 3600_000 + 119_000).length).toBe(1)
-    expect(holdsToCheck([call], 3600_000 + 120_000).length).toBe(0)
     expect(checkEnded(call, 3600_000 + 120_000)).toBe(true)
+    expect(holdsToCheck([call], 3600_000 + 120_000).length).toBe(1) // its last read
+    const last = { ...call, finalChecked: true }
+    expect(holdsToCheck([last], 3600_000 + 120_000).length).toBe(0)
+    expect(holdsToCheck([last], 3600_000 + 120_000, true).length).toBe(1) // /kiff
   })
   test('without an expiry: asked about for the longest hold, 7 days', () => {
     expect(holdsToCheck([base], MAX_HOLD_MS - 1).length).toBe(1)
-    expect(holdsToCheck([base], MAX_HOLD_MS).length).toBe(0)
+    expect(holdsToCheck([{ ...base, finalChecked: true }], MAX_HOLD_MS).length).toBe(0)
   })
   test('an answered call is not ended by the bound', () => {
     expect(checkEnded({ ...base, answer: 'approved' as const }, MAX_HOLD_MS * 2)).toBe(false)
