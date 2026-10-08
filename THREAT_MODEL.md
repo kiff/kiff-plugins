@@ -192,7 +192,7 @@ it.
 ticket, an email), makes its result look like a KIFF hold, with its own
 "answer here" link.*
 
-- **Mitigated in `kiff-cards-ui`:** the gateway passes a forwarded tool's
+- **Mitigated in the `kiff` plugin:** the gateway passes a forwarded tool's
   result through unchanged, so the plugin trusts KIFF's call metadata only at
   the top level of an error result (every result the gateway writes itself
   is one), reads KIFF's wording only in error results, and shows a review
@@ -202,14 +202,25 @@ ticket, an email), makes its result look like a KIFF hold, with its own
   if any, can only lead to KIFF Cloud, and no display changes what KIFF
   decided: the record is in KIFF Cloud.
 
-### The optional display plugin is wrong or tampered with
+### The optional plugin is wrong or tampered with
 
-*`kiff-cards-ui` shows the Card, holds and outcomes in Claude Code.*
+*The `kiff` plugin shows the Card, holds and outcomes in Claude Code, and
+tells the agent once the owner answered a held call.*
 
 - **Enforced:** it holds no authority of its own. It uses the session's
-  existing gateway connection to call only the read-only `kiff_card` tool,
+  existing gateway connection to call only the read-only `kiff_card` and
+  `kiff_pending` tools,
   and it never answers, retries or changes a call. Every call is still
   decided by the gateway.
+- **The turn it starts:** once `kiff_pending` (the gateway's own tool, never
+  a forwarded one) says a hold was answered, the plugin starts one turn per
+  call, in its own fixed words: the tool's name, KIFF's hold id, the agent's
+  own operation id only when it is a plain id, and, for a call made without
+  one, KIFF's own key for it only when it has KIFF's form. No text a tool or
+  page wrote goes into it, nor the call's arguments, and Claude Code marks it as the plugin's, not the person's.
+  If it were wrong, the worst case is an agent retrying a call that is still
+  held: the gateway answers that retry as it would any other, and sends an
+  approved call once.
 - **Fail-open by design:** if the plugin errors, the agent's call and its
   answer pass through unchanged. That is safe because the plugin enforces
   nothing.

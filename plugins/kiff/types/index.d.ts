@@ -12,6 +12,9 @@ export type KiffCallState =
   | 'tool_error' // forwarded; the tool itself reported an error
   | 'failed'
 
+/** How a hold ended, before the agent's retry collects it. */
+export type KiffAnswer = 'approved' | 'refused' | 'expired'
+
 export type KiffCall = {
   /** The call's kiff_operation_id, or the tool_use id when it had none. */
   key: string
@@ -23,6 +26,27 @@ export type KiffCall = {
   reviewUrl?: string
   /** RFC 3339: when a held call stops waiting for an answer. */
   holdExpiresAt?: string
+  /** The hold's exception id, which kiff_card is asked about. */
+  exceptionId?: string
+  /** The call's kiff_operation_id, only when it is a plain id that can be repeated in a prompt. */
+  operationId?: string
+  /** True when the call had a kiff_operation_id, plain or not. */
+  hasOperationId?: boolean
+  /**
+   * KIFF's own key for a call made without a kiff_operation_id, as
+   * kiff_pending lists it: passed as kiff_operation_id, it collects that
+   * call. Only a key of KIFF's form is kept.
+   */
+  collectId?: string
+  /** The owner's answer to a held call, read through kiff_card. */
+  answer?: KiffAnswer
+  /** True once the answer was shown and the agent was told, so only once. */
+  announced?: boolean
+  /**
+   * True once a hold past its bound (checkEnded) got its one last read.
+   * After that it is asked about only when the person types /kiff.
+   */
+  finalChecked?: boolean
   /** Milliseconds since the epoch of the latest answer. */
   at: number
 }
@@ -37,7 +61,7 @@ export type KiffCard = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'kiff-cards-ui': {
+    kiff: {
       calls: KiffCall[]
       card: KiffCard | null
       server: string | null

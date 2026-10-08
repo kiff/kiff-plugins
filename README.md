@@ -128,43 +128,55 @@ Revoking the link ends every connection made through it.
 
 ## Optional: see the Card in Claude Code
 
-`kiff-cards-ui` is a second, optional plugin. It needs `kiff-cards` connected
-to the gateway, and a Claude Code version that runs plugin hooks modules.
+`kiff` is a second, optional plugin. It needs `kiff-cards` connected to the
+gateway, and a Claude Code version that runs plugin hooks modules. (Until
+0.2.0 it was called `kiff-cards-ui`; uninstall that one.)
 
 ```text
-/plugin install kiff-cards-ui@kiff
+/plugin install kiff@kiff
 ```
 
 - **Status line:** what is left on the agent's Card, for example
-  `KIFF · 320 of 500 amount left today · 1 waiting for approval`.
+  `kiff: 320 of 500 amount left today`. While a call waits for a person it
+  says that instead: `kiff: waiting for approval · refund_order`.
 - **A notice when KIFF holds a call:** what was held, that nothing was sent,
   and the link where a person answers it in KIFF Cloud.
+- **When the owner answers:** while a call is held, the plugin reads the
+  gateway's read-only `kiff_pending` every 15 seconds: the agent's held
+  calls, with the owner's answer once given. Once the owner approves or
+  refuses a call, or the wait ends, it shows one notice and starts one turn
+  telling the agent (Claude Code runs it when the session is idle, never in
+  the middle of a turn). On an approval the agent is told to call again with
+  the same `kiff_operation_id`, or, for a call made without one, with the id
+  KIFF lists for it; that call gets the result, sent once. Two minutes
+  after a hold expires it asks about it once more, then only when you type
+  `/kiff`; an answer it reads, however late, is always applied.
 - **`/kiff`:** a pane with this session's KIFF calls and what KIFF answered:
-  allowed, waiting for approval, refused, or outcome unknown.
+  allowed, waiting for approval, approved, refused, or outcome unknown.
 
-It only displays. It reads what the gateway already answered and the
-gateway's read-only `kiff_card` tool. It never answers, retries or changes a
-call, so a held call keeps waiting for a person in KIFF Cloud, and only the
-agent's own retry of the same call gets their answer. If it fails, calls go
-on as they would without it: the gateway enforces the Card either way.
+It never answers, retries or changes a call. A held call waits for a person
+in KIFF Cloud, and only the agent's own retry of the same call gets their
+answer and is sent, once. If the plugin fails, calls go on as they would
+without it: the gateway enforces the Card either way.
 
-The status line reads the Card with the gateway's read-only `kiff_card`
-tool, which Claude Code's permissions cover like any other tool. A plugin
-cannot grant itself a permission, so allow it once:
+The plugin reads two of the gateway's read-only tools: `kiff_card` for the
+status line, and `kiff_pending` for held calls. Claude Code's permissions
+cover them like any other tool, and a plugin cannot grant itself a
+permission, so allow both once:
 
-- **The easy way:** type `/kiff`. If the Card could not be read, Claude
-  Code asks whether to allow `kiff_card`; choose to always allow it. In
-  auto mode Claude Code decides without asking, so use the rule below.
-- **Or by hand:** `/permissions` → **Allow** → add a rule that is just the
-  tool's name (no "allow" in front), the one that matches how the gateway
-  is connected, and save it under **User settings** so it applies in every
-  folder (saved for a project, it only applies there):
-  - `mcp__plugin_kiff-cards_kiff__kiff_card` (this repo's `kiff-cards` plugin)
-  - `mcp__kiff__kiff_card` (a connect link added as `kiff`)
-  - `mcp__claude_ai_KIFF__kiff_card` (the claude.ai KIFF connector)
+- **The easy way:** type `/kiff`. If one could not be read, Claude Code
+  asks whether to allow it; choose to always allow it. In auto mode Claude
+  Code decides without asking, so use the rules below.
+- **Or by hand:** `/permissions` → **Allow** → add two rules that are just
+  the tools' names (no "allow" in front), the ones that match how the
+  gateway is connected, and save them under **User settings** so they apply
+  in every folder (saved for a project, they only apply there):
+  - `mcp__plugin_kiff-cards_kiff__kiff_card` and `mcp__plugin_kiff-cards_kiff__kiff_pending` (this repo's `kiff-cards` plugin)
+  - `mcp__kiff__kiff_card` and `mcp__kiff__kiff_pending` (a connect link added as `kiff`)
+  - `mcp__claude_ai_KIFF__kiff_card` and `mcp__claude_ai_KIFF__kiff_pending` (the claude.ai KIFF connector)
 
-Until it is allowed, the plugin says so once and stops reading in the
-background, instead of asking after every call. Once it is allowed,
+Until a tool is allowed, the plugin says so once and stops reading it in
+the background, instead of asking after every call. Once it is allowed,
 background reads start again.
 
 The amount it shows is a guess: the first argument whose name contains
