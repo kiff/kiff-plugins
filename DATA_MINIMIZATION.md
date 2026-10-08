@@ -22,8 +22,8 @@ This plugin **reads and writes**.
   working directory when you ask it to. It sends nothing to KIFF.
 - **The optional `kiff` plugin** only reads. It reads the answers the
   gateway already returned to the agent, and calls the gateway's read-only
-  `kiff_card` tool (which draws nothing from the Card and is not recorded as
-  a call). It keeps the session's KIFF calls in memory for the session only
+  `kiff_card` and `kiff_pending` tools (which draw nothing from the Card and
+  are not recorded as calls). It keeps the session's KIFF calls in memory for the session only
   and writes nothing to disk.
 
 ## What leaves your machine
@@ -34,9 +34,10 @@ Only through the `kiff` MCP server, to `https://mcp.kiff.dev/mcp`:
 - the tool name and the arguments of each call the agent makes through it.
 
 With the `kiff` plugin installed, also: a `kiff_card` read through the same
-server, when a session starts, after each KIFF call and on `/kiff`, with no
-arguments; and, only while a call is held, every 15 seconds, with the held
-calls' exception ids (KIFF's own ids, from KIFF's answer).
+server, when a session starts, after each KIFF call and on `/kiff`; and,
+only while a call is held, a `kiff_pending` read every 15 seconds. Neither
+sends any arguments. `kiff_pending` answers with the agent's own pending
+calls; the plugin keeps only each hold's answer and KIFF's id for it.
 
 The skills never read credentials, keys or environment variables from your
 machine, and the plugin sends no telemetry.

@@ -59,11 +59,12 @@ version live.
 - The same for `plugins/kiff/`: raise its `version` in its `plugin.json`
   and in `marketplace.json`, and run `claude plugin validate ./plugins/kiff`
   and `claude plugin test ./plugins/kiff`. It calls no KIFF tool but the
-  read-only `kiff_card`, and never answers, retries or rewrites a KIFF call.
-  The one thing it may do beyond showing is start one turn per held call,
-  once the owner answered, in its own fixed words (the tool's name and the
-  agent's own operation id, never text a tool or page wrote); the agent
-  decides whether to call again.
+  read-only `kiff_card` and `kiff_pending`, and never answers, retries or
+  rewrites a KIFF call. The one thing it may do beyond showing is start one
+  turn per held call, once the owner answered, in its own fixed words (the
+  tool's name, KIFF's ids, and the agent's own operation id when it is a
+  plain id; never text a tool or page wrote); the agent decides whether to
+  call again.
 - Merging to `main` is the release. Do not merge a change that is not ready
   to ship.
 

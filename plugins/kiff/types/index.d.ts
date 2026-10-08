@@ -32,6 +32,12 @@ export type KiffCall = {
   operationId?: string
   /** True when the call had a kiff_operation_id, plain or not. */
   hasOperationId?: boolean
+  /**
+   * KIFF's own key for a call made without a kiff_operation_id, as
+   * kiff_pending lists it: passed as kiff_operation_id, it collects that
+   * call. Only a key of KIFF's form is kept.
+   */
+  collectId?: string
   /** The owner's answer to a held call, read through kiff_card. */
   answer?: KiffAnswer
   /** True once the answer was shown and the agent was told, so only once. */

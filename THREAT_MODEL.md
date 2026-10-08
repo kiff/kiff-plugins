@@ -208,14 +208,16 @@ ticket, an email), makes its result look like a KIFF hold, with its own
 tells the agent once the owner answered a held call.*
 
 - **Enforced:** it holds no authority of its own. It uses the session's
-  existing gateway connection to call only the read-only `kiff_card` tool,
+  existing gateway connection to call only the read-only `kiff_card` and
+  `kiff_pending` tools,
   and it never answers, retries or changes a call. Every call is still
   decided by the gateway.
-- **The turn it starts:** once `kiff_card` (the gateway's own tool, never a
-  forwarded one) says a hold was answered, the plugin starts one turn per
-  call, in its own fixed words: the tool's name, and the agent's own
-  operation id only when it is a plain id. No text a tool or page wrote
-  goes into it, and Claude Code marks it as the plugin's, not the person's.
+- **The turn it starts:** once `kiff_pending` (the gateway's own tool, never
+  a forwarded one) says a hold was answered, the plugin starts one turn per
+  call, in its own fixed words: the tool's name, KIFF's hold id, the agent's
+  own operation id only when it is a plain id, and, for a call made without
+  one, KIFF's own key for it only when it has KIFF's form. No text a tool or
+  page wrote goes into it, nor the call's arguments, and Claude Code marks it as the plugin's, not the person's.
   If it were wrong, the worst case is an agent retrying a call that is still
   held: the gateway answers that retry as it would any other, and sends an
   approved call once.
