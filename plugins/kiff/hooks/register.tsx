@@ -39,7 +39,8 @@ import {
 const PANE = 'kiff'
 // How often a held call's answer is asked for, only while one is held.
 const HOLD_CHECK_MS = 15000
-// The most kiff_pending pages one check reads (50 calls each).
+// The most kiff_pending pages one check reads (50 calls each); the next
+// check goes on from the last.
 const MAX_PENDING_PAGES = 10
 
 const calls = atom({ plugin: 'kiff', key: 'calls' } as const, [] as KiffCall[])
@@ -217,6 +218,22 @@ async function pendingRefusalNotice($: Engine): Promise<string> {
   return `KIFF can't see whether held calls were answered. If Claude Code blocked it, add the rule ${tool} in /permissions → Allow (User settings). Details: /kiff`
 }
 
+// Where the last kiff_pending scan stopped: one check reads at most
+// MAX_PENDING_PAGES pages and the next check goes on from there, so a hold
+// behind many newer calls is still reached (kiff-plugins#13). A scan starts
+// again from the newest page only once it has ended. It belongs to the
+// gateway it was read from and to this session.
+type PendingScan = {
+  server: string | null
+  cursor: string | undefined
+  // The holds asked about when the scan began, on its first page: when it
+  // ends, every one of them was searched for.
+  wanted: Set<string>
+  // Holds the scan has already listed.
+  seen: Set<string>
+}
+let scan: PendingScan | null = null
+
 /**
  * Asks kiff_pending whether the owner answered the held calls: one read
  * lists every held call of this agent's, with its answer. Each answer is
@@ -232,27 +249,41 @@ async function checkHolds($: Engine, asked = false) {
   checking = true
   try {
     // Page through kiff_pending until every hold asked about is found, or
-    // the pages run out (review on kiff-cloud#1077: none is left out).
+    // the pages run out (review on kiff-cloud#1077: none is left out),
+    // going on from where the last check stopped.
+    const gateway = await findServer($)
+    if (scan && scan.server !== gateway) scan = null
+    const current = (scan ??= { server: gateway, cursor: undefined, wanted: new Set(wanted.map(c => c.exceptionId!)), seen: new Set() })
     const listed = new Map<string, PendingHold>()
-    const missing = new Set(wanted.map(c => c.exceptionId!))
-    let cursor: string | undefined
-    for (let page = 0; page < MAX_PENDING_PAGES; page++) {
-      const res = await callGatewayTool($, PENDING_TOOL, cursor ? { cursor } : {})
-      if (!res) return
+    const missing = new Set(wanted.map(c => c.exceptionId!).filter(id => !current.seen.has(id)))
+    // Ended: every hold asked about was found, or the last page was read.
+    let ended = missing.size === 0
+    for (let page = 0; page < MAX_PENDING_PAGES && !ended; page++) {
+      const res = await callGatewayTool($, PENDING_TOOL, current.cursor ? { cursor: current.cursor } : {})
+      // A failed read keeps the scan where it is, for the next check.
+      if (!res) break
       if (res.isError) {
         await pendingReadFailed($, res)
-        return
+        break
       }
       pendingReadRefused = false
       const text = res.content.map(b => (b.type === 'text' ? b.text : '')).join('\n')
       const pageRead = readPending(res.structuredContent, text)
       for (const [id, p] of pageRead.holds) {
         listed.set(id, p)
+        current.seen.add(id)
         missing.delete(id)
       }
-      cursor = pageRead.next
-      if (missing.size === 0 || !cursor) break
+      current.cursor = pageRead.next
+      ended = missing.size === 0 || !current.cursor
     }
+    if (ended) scan = null
+    // A hold past its bound got its last read only when this check listed
+    // it with an answer KIFF could read (waiting counts; unavailable does
+    // not), or the scan ended without listing a hold it searched for from
+    // its first page. A scan cut short or failing keeps it asked about.
+    const lastRead = (id: string) =>
+      listed.has(id) ? !listed.get(id)!.unread : ended && current.wanted.has(id) && !current.seen.has(id)
     const now = await $.clock.now()
     const told: KiffCall[] = []
     await update($, calls, list =>
@@ -267,7 +298,7 @@ async function checkHolds($: Engine, asked = false) {
           return done
         }
         // Past its bound with no answer: that was its last read.
-        return checkEnded(c, now) ? { ...c, finalChecked: true } : c
+        return checkEnded(c, now) && lastRead(c.exceptionId) ? { ...c, finalChecked: true } : c
       }),
     )
     for (const call of told) {
@@ -347,6 +378,8 @@ export const register: Register = on => {
       name: 'kiff',
       description: "Show this agent's KIFF Card and this session's KIFF calls",
     })
+    // A scan of kiff_pending belongs to the session that started it.
+    scan = null
     // MCP servers may still be connecting when the session starts.
     void readCardAtStart($).catch(() => {})
     // Asks only while a call is held; otherwise a tick does nothing.

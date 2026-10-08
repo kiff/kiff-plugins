@@ -295,6 +295,12 @@ describe('held calls and their answers (#1069)', () => {
     expect(answerOf('ended')).toBe('expired')
     expect(answerOf('something new')).toBeUndefined()
   })
+  test('kiff_pending: a hold whose answer KIFF could not read is marked unread; waiting is read', () => {
+    const calls = ['waiting', 'unavailable', 'approved', 'something-new'].map((answer, i) => ({ state: 'held', exception_id: `exc-${i}`, answer }))
+    const { holds } = readPending({ calls }, undefined)
+    expect([0, 1, 2, 3].map(i => holds.get(`exc-${i}`)!.unread)).toEqual([false, true, false, true])
+  })
+
   test('held calls are read from kiff_pending, structured or as JSON text, taking only KIFF\'s own words', () => {
     const key = `tc-${'a'.repeat(40)}`
     const body = {
@@ -305,8 +311,8 @@ describe('held calls and their answers (#1069)', () => {
       ],
     }
     const want = [
-      ['exc-1', { answer: 'approved', collectId: key }],
-      ['exc-2', { answer: undefined, collectId: undefined }],
+      ['exc-1', { answer: 'approved', unread: false, collectId: key }],
+      ['exc-2', { answer: undefined, unread: false, collectId: undefined }],
     ]
     expect([...readPending(body, undefined).holds]).toEqual(want)
     expect([...readPending(undefined, JSON.stringify(body)).holds]).toEqual(want)

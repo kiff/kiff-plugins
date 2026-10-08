@@ -1,7 +1,7 @@
 {
   "name": "kiff",
   "displayName": "KIFF: your agent's Card and held calls, in Claude Code",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Beta, optional. Shows what is left on the agent's KIFF Card in the status line, says when KIFF holds a call and when the owner answers it, and lists this session's KIFF calls in a /kiff pane. It never answers, retries or changes a call: once the owner answers, it tells the agent in one turn, and the agent decides whether to call again. Use with kiff-cards.",
   "author": {
     "name": "KIFF",

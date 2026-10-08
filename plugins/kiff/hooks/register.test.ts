@@ -343,6 +343,8 @@ test('finds the gateway by name when its tools are deferred out of the tool list
 // expires: when the rig's holds stop waiting (an hour after NOW unless set).
 // pageSize: how many calls one kiff_pending page lists (all unless set).
 // offline: kiff_pending fails as KIFF does when it cannot be read.
+// newerUnknown: that many newer calls whose outcome is unknown, listed
+// before the holds (as calls from earlier sessions can be).
 type HoldWorld = {
   status: (id: string) => string
   refuse: boolean
@@ -350,10 +352,11 @@ type HoldWorld = {
   expires?: string
   pageSize?: number
   offline?: boolean
+  newerUnknown?: number
 }
 function holdRig(on: On, world: HoldWorld) {
   const clock = mock.clock(on, { now: NOW })
-  const seen = { toasts: [] as string[], status: undefined as string | undefined, asked: [] as string[][], prompts: [] as string[], tools: [] as string[] }
+  const seen = { toasts: [] as string[], status: undefined as string | undefined, asked: [] as string[][], cursors: [] as (string | undefined)[], prompts: [] as string[], tools: [] as string[] }
   on('ui.toast', (_$, e) => {
     seen.toasts.push(e.text)
     return { value: undefined }
@@ -377,6 +380,7 @@ function holdRig(on: On, world: HoldWorld) {
   on('mcp.call', (_$, e) => {
     if (e.tool === 'kiff_pending') {
       seen.asked.push(held.map(h => h.id))
+      seen.cursors.push((e.args as { cursor?: string } | undefined)?.cursor)
       if (world.refuse) {
         return { value: { content: [{ type: 'text', text: 'Permission to use mcp__claude_ai_KIFF__kiff_pending has been denied.' }], isError: true } }
       }
@@ -388,6 +392,9 @@ function holdRig(on: On, world: HoldWorld) {
         : held.map(h => ({ tool: 'refund_order', state: 'held', exception_id: h.id, answer: words[world.status(h.id)] ?? world.status(h.id), kiff_operation_id: h.op }))
       // Newest first, a page at a time, as the gateway pages.
       all.reverse()
+      for (let i = 0; i < (world.newerUnknown ?? 0); i++) {
+        all.unshift({ tool: 'refund_order', state: 'unknown', exception_id: '', answer: '', kiff_operation_id: `op-unknown-${i}` })
+      }
       const from = Number((e.args as { cursor?: string } | undefined)?.cursor?.slice(1) ?? 0)
       const size = world.pageSize ?? all.length
       const calls = all.slice(from, from + size)
@@ -617,4 +624,104 @@ test('a hold on a later kiff_pending page is found', async ($, on) => {
   expect(seen.asked.length).toBe(3) // pages of 2, 2 and 1: op-1 is the oldest, on the last
   expect(seen.prompts.length).toBe(1)
   expect(seen.prompts[0]).toMatch(/kiff_operation_id op-1,/)
+})
+
+// kiff-plugins#13: a check reads at most ten pages of kiff_pending. The next
+// check goes on from where it stopped, so a hold behind 500 newer calls
+// (eleven pages of 50) is still reached, and announced once.
+test('an approval behind 500 newer calls is announced once, across checks', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'approved', refuse: false, pageSize: 50, newerUnknown: 500 })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-1', 'o-1'))
+  await clock.advance(15000)
+  expect(seen.asked.length).toBe(10) // the most one check reads
+  expect(seen.prompts).toEqual([])
+  await clock.advance(15000)
+  expect(seen.cursors[10]).toBe('p500') // on from page 11, not page 1
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.prompts[0]).toMatch(/kiff_operation_id op-1,/)
+  await clock.advance(60_000)
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.toasts.filter(t => t.includes('approved')).length).toBe(1)
+})
+
+test('/kiff goes on past the first ten pages', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'approved', refuse: false, pageSize: 50, newerUnknown: 500 })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-2', 'o-2'))
+  await clock.advance(15000) // pages 1 to 10
+  await $.command.run({ command: 'kiff', args: '' } as never) // page 11
+  expect(seen.asked.length).toBe(11)
+  await clock.advance(1) // the turn goes from a timer just after /kiff
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.prompts[0]).toMatch(/kiff_operation_id op-2,/)
+})
+
+// A hold past its bound gets its last read only when a scan reaches it:
+// ten pages that stop short of it are not that read.
+test('a hold past its bound behind a cut-short scan is still read, and its approval counts', async ($, on) => {
+  const world: HoldWorld = { status: () => 'approved', refuse: false, pageSize: 50, newerUnknown: 500, offline: true, expires: '2026-10-06T14:00:30Z' }
+  const { clock, seen } = holdRig(on, world)
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-3', 'o-3'))
+  await clock.advance(5 * 60 * 1000) // offline past expiry + 2 min
+  world.offline = false
+  await clock.advance(15000) // pages 1 to 10: not found yet
+  expect(seen.prompts).toEqual([])
+  await clock.advance(15000) // page 11
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.prompts[0]).toMatch(/kiff_operation_id op-3,/)
+})
+
+test('a hold KIFF never reports, behind 500 newer calls, stops being asked about once a scan has ended', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'held', refuse: false, unreported: true, pageSize: 50, newerUnknown: 500, expires: '2026-10-06T14:00:30Z' })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-4', 'o-4'))
+  await clock.advance(5 * 60 * 1000)
+  const after = seen.asked.length
+  await clock.advance(10 * 60 * 1000)
+  expect(seen.asked.length).toBe(after) // no more reads
+  expect(seen.prompts).toEqual([])
+  // Still there for /kiff, which asks again from the newest page.
+  await $.command.run({ command: 'kiff', args: '' } as never)
+  expect(seen.asked.length).toBe(after + 10)
+  expect(seen.cursors[after]).toBeUndefined()
+})
+
+test('a failed read keeps the scan where it was; a new session starts from the newest page', async ($, on) => {
+  const world: HoldWorld = { status: () => 'held', refuse: false, pageSize: 50, newerUnknown: 1000 }
+  const { clock, seen } = holdRig(on, world)
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-5', 'o-5'))
+  await clock.advance(15000) // pages 1 to 10
+  world.offline = true
+  await clock.advance(15000) // fails at page 11
+  expect(seen.cursors[10]).toBe('p500')
+  world.offline = false
+  await clock.advance(15000)
+  expect(seen.cursors[11]).toBe('p500') // the same page again, not page 1
+  await $.session.start({ cwd: '/' } as never)
+  const before = seen.cursors.length
+  await clock.advance(15000)
+  expect(seen.cursors[before]).toBeUndefined()
+})
+
+// Review on #14: kiff_pending lists the hold, but KIFF could not read the
+// owner's answer (unavailable). That is not the hold's last read: once KIFF
+// can read it again, an approval given in time is announced without /kiff.
+test('an unavailable owner answer past the grace keeps automatic recovery', async ($, on) => {
+  let ownerReadAvailable = false
+  const { clock, seen } = holdRig(on, {
+    status: () => (ownerReadAvailable ? 'approved' : 'unavailable'),
+    refuse: false,
+    expires: '2026-10-06T14:00:30Z',
+  })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-unavailable', 'o-unavailable'))
+  await clock.advance(5 * 60 * 1000)
+  expect(seen.prompts).toEqual([])
+  ownerReadAvailable = true
+  await clock.advance(15000)
+  expect(seen.prompts.length).toBe(1)
+  expect(seen.prompts[0]).toMatch(/kiff_operation_id op-unavailable,/)
 })
