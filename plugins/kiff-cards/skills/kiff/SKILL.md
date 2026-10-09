@@ -177,6 +177,14 @@ Guidance:
   one balance. An agent holding several Cards is bound by the tightest.
 - A Card narrows what the domain allows. It cannot make a forbidden action
   legal.
+- State each limit's measure: `count` defaults to authorized attempts,
+  `sum(<parameter>)` to effects. Propose overrides explicitly. A trusted,
+  final no-effect outcome may release effect quantities once; generic
+  errors and timeouts do not, and attempt quantities are never returned.
+- Approval waives only a reviewed per-action threshold and still charges
+  full quantities. A cumulative ceiling needs an explicit management
+  revision. Extra room defaults to **this window only**, with a fixed end
+  confirmed by the owner; never suggest approval as a way past a budget.
 
 ## Handle a KIFF result
 
@@ -195,7 +203,7 @@ an identical call within 10 minutes is treated as a retry of the first.
 | tool's own result | Inside the Card; KIFF forwarded it | Continue |
 | `held` | Waiting for the owner. Nothing was sent. | Tell the person the call is waiting and give them `review_url`. Retry the **identical call, same `kiff_operation_id`**, no sooner than `retry_after_s`, until it resolves or `hold_expires_at` passes. |
 | `deciding` / `forwarding` | KIFF is still working on it | Retry the identical call after `retry_after_s` |
-| `forwarded` (with `repeat: true`) | An identical earlier call was already sent; this is its result | It is already done. Do not do it again. |
+| `forwarded` (with `repeat: true`) | An earlier call was sent; this is its recorded result | Read whether the tool reported success or error. Do not describe an error as done, and do not send the action again. |
 | `refused` | Nothing was sent | Do what the text and `retry` say. `none`: stop and report. `new_call`: a new attempt with a **new** `kiff_operation_id`, only after the step the text names (the owner changes the Card, the period has room, or a short wait because KIFF was briefly unavailable). Never make the change another way. |
 | `failed` | The tool returned an error | Report it. Follow `retry`. |
 | `unknown` | The call may have reached the tool, and the answer was lost | **Do not retry.** KIFF will not send it again. Tell the person to check the tool's own records. |
@@ -203,6 +211,17 @@ an identical call within 10 minutes is treated as a retry of the first.
 Follow the `retry` field over any habit of your own: `same_call` means repeat
 the identical call; `new_call` means this call is over and a new attempt
 needs a new id after the step in the text; `none` means stop.
+
+Use read-only `kiff_pending` to check a held call without collecting it.
+Follow `next_cursor` for older pages. Its `answer: approved_no_room`
+means the earlier approval is waiting for cumulative room, not ready to
+collect. Keep the original call identity and arguments, tell the owner
+which budget needs revision, and wait. `unavailable` is a failed read,
+not a refusal. Only a collectible approval permits collection.
+
+The setup agent, when acting with the administrator's confirmation,
+uses that administrator's management authority. Runtime credentials
+stay separate and cannot issue Cards, add room or approve work.
 
 If your client runs tool calls as **MCP tasks**, a held call comes back as a
 working task instead: wait on it, and the conversation continues with the

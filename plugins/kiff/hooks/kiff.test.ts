@@ -299,6 +299,7 @@ describe('held calls and their answers (#1069)', () => {
     const calls = ['waiting', 'unavailable', 'approved', 'something-new'].map((answer, i) => ({ state: 'held', exception_id: `exc-${i}`, answer }))
     const { holds } = readPending({ calls }, undefined)
     expect([0, 1, 2, 3].map(i => holds.get(`exc-${i}`)!.unread)).toEqual([false, true, false, true])
+    expect(holds.get('exc-1')!.roomStatus).toBeUndefined()
   })
 
   test('held calls are read from kiff_pending, structured or as JSON text, taking only KIFF\'s own words', () => {

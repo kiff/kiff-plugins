@@ -1,7 +1,7 @@
 {
   "name": "kiff-cards",
   "displayName": "KIFF Cards: delegated authority for AI agents",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Beta. Give each AI agent an authority card: which actions it may take, how much, and who approves the rest. For companies whose agents act on their money and customer accounts.",
   "author": {
     "name": "KIFF",

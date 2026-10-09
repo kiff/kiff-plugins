@@ -439,6 +439,108 @@ test('while a call is held, the status line says so and kiff_card is asked about
   expect(seen.prompts).toEqual([])
 })
 
+test('approval without room stays visible, starts no turn, and is collected once after room returns', async ($, on) => {
+  let status = 'approved_no_room'
+  const { clock, seen } = holdRig(on, { status: () => status, refuse: false })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-room'))
+  await clock.advance(15000)
+  await clock.advance(15000)
+  expect(seen.status).toBe('approved, waiting for Card room · refund_order')
+  expect(seen.prompts).toEqual([])
+  expect(seen.toasts.filter(t => t.includes('Card has no room'))).toHaveLength(1)
+  let ui = await pane($)
+  expect(await ui.find({ type: 'Text', text: /^approved, waiting for Card room$/ })).toBeDefined()
+  await ui.unmount()
+  status = 'unavailable'
+  await clock.advance(15000)
+  expect(seen.status).toBe('waiting for approval · refund_order')
+  expect(seen.prompts).toEqual([])
+  status = 'approved_no_room'
+  await clock.advance(15000)
+  expect(seen.toasts.filter(t => t.includes('Card has no room'))).toHaveLength(1)
+  status = 'approved'
+  await clock.advance(15000)
+  await clock.advance(15000)
+  expect(seen.prompts).toHaveLength(1)
+  expect(seen.prompts[0]).toContain('same kiff_operation_id')
+  expect(seen.toasts.filter(t => t.includes('agent is told'))).toHaveLength(1)
+  expect(seen.tools).toEqual(['mcp__claude_ai_KIFF__refund_order'])
+  ui = await pane($)
+  expect(await ui.find({ type: 'Text', text: /^approved$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('an unavailable answer on a plain hold does not outlive its wait or mention room', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'unavailable', refuse: false, expires: '2026-10-06T14:00:30Z' })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-unread-ended'))
+  await clock.advance(15000)
+  expect(seen.status).toBe('waiting for approval · refund_order')
+  expect(seen.toasts.join(' ')).not.toMatch(/room/i)
+  await clock.advance(15000)
+  expect(seen.status ?? '').not.toMatch(/waiting|room/i)
+  await clock.advance(120000)
+  expect(seen.status ?? '').not.toMatch(/waiting|room/i)
+  expect(seen.prompts).toEqual([])
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Text', text: /^wait ended$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /room/i })).toBeUndefined()
+  expect(await ui.find({ type: 'Link', text: /Answer in KIFF Cloud|room/i })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a refusal wins after approval without room and never prompts collection', async ($, on) => {
+  let status = 'approved_no_room'
+  const { clock, seen } = holdRig(on, { status: () => status, refuse: false })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-refused-room'))
+  await clock.advance(15000)
+  status = 'rejected'
+  await clock.advance(15000)
+  await clock.advance(15000)
+  expect(seen.prompts).toHaveLength(1)
+  expect(seen.prompts[0]).toContain('Do not call it again')
+  expect(seen.prompts[0]).not.toContain('get its result')
+  expect(seen.tools).toEqual(['mcp__claude_ai_KIFF__refund_order'])
+})
+
+test('an identical user retry does not repeat the no-room notice', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'approved_no_room', refuse: false })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-room-retry'))
+  await clock.advance(15000)
+  await $.tool.call(refund('op-room-retry'))
+  await clock.advance(15000)
+  expect(seen.toasts.filter(t => t.includes('Card has no room'))).toHaveLength(1)
+  expect(seen.prompts).toEqual([])
+  expect(seen.tools).toHaveLength(2) // only the two explicit user calls
+})
+
+test('approved waiting for room survives the polling bound and /kiff collects a later approval once', async ($, on) => {
+  let status = 'approved_no_room'
+  const { clock, seen } = holdRig(on, { status: () => status, refuse: false, expires: '2026-10-06T14:00:30Z' })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-late-room'))
+  await clock.advance(5 * 60 * 1000)
+  const reads = seen.asked.length
+  await clock.advance(15000)
+  expect(seen.asked).toHaveLength(reads)
+  expect(seen.prompts).toEqual([])
+  expect(seen.status).toBe('approved, waiting for Card room · refund_order')
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Text', text: /^approved, waiting for Card room$/ })).toBeDefined()
+  await ui.unmount()
+  status = 'approved'
+  await $.command.run({ command: 'kiff', args: '' } as never)
+  await clock.advance(15000)
+  await $.command.run({ command: 'kiff', args: '' } as never)
+  await clock.advance(15000)
+  expect(seen.prompts).toHaveLength(1)
+  expect(seen.prompts[0]).toContain('same kiff_operation_id')
+  expect(seen.tools).toEqual(['mcp__claude_ai_KIFF__refund_order'])
+})
+
 test('once the owner approves, one toast and one turn tell the agent to call again, and only once', async ($, on) => {
   let status = 'held'
   const { clock, seen } = holdRig(on, { status: () => status, refuse: false })
