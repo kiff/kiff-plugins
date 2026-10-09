@@ -486,6 +486,18 @@ test('a refusal wins after approval without room and never prompts collection', 
   expect(seen.tools).toEqual(['mcp__claude_ai_KIFF__refund_order'])
 })
 
+test('an identical user retry does not repeat the no-room notice', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'approved_no_room', refuse: false })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-room-retry'))
+  await clock.advance(15000)
+  await $.tool.call(refund('op-room-retry'))
+  await clock.advance(15000)
+  expect(seen.toasts.filter(t => t.includes('Card has no room'))).toHaveLength(1)
+  expect(seen.prompts).toEqual([])
+  expect(seen.tools).toHaveLength(2) // only the two explicit user calls
+})
+
 test('approved waiting for room survives the polling bound and /kiff collects a later approval once', async ($, on) => {
   let status = 'approved_no_room'
   const { clock, seen } = holdRig(on, { status: () => status, refuse: false, expires: '2026-10-06T14:00:30Z' })

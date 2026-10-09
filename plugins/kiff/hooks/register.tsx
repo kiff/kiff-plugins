@@ -440,6 +440,9 @@ export const register: Register = on => {
           at: await $.clock.now(),
         }
         const before = (await read($, calls)).find(c => c.key === call.key)
+        if (call.state === 'held' && before?.state === 'held' && call.exceptionId === before.exceptionId) {
+          call.roomNoticed = before.roomNoticed
+        }
         await update($, calls, list => upsert(list, call))
         if (call.state === 'held' && before?.state !== 'held') {
           $.ui.toast(heldToast(call), { timeoutMs: 12000 })
