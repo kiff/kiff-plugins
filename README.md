@@ -139,6 +139,9 @@ gateway, and a Claude Code version that runs plugin hooks modules. (Until
 - **Status line:** what is left on the agent's Card, for example
   `kiff: 320 of 500 amount left today`. While a call waits for a person it
   says that instead: `kiff: waiting for approval · refund_order`.
+  An approval without budget room reads `approved, waiting for room`;
+  an unavailable room read is shown separately. Neither starts a
+  collection turn.
 - **A notice when KIFF holds a call:** what was held, that nothing was sent,
   and the link where a person answers it in KIFF Cloud.
 - **When the owner answers:** while a call is held, the plugin reads the
@@ -151,6 +154,9 @@ gateway, and a Claude Code version that runs plugin hooks modules. (Until
   KIFF lists for it; that call gets the result, sent once. Two minutes
   after a hold expires it asks about it once more, then only when you type
   `/kiff`; an answer it reads, however late, is always applied.
+  `approved_no_room` keeps the call pending. When KIFF reports it is
+  collectible, the plugin shows its usual single notice and turn; it
+  never revises a budget or retries the business tool itself.
 - **`/kiff`:** a pane with this session's KIFF calls and what KIFF answered:
   allowed, waiting for approval, approved, refused, or outcome unknown.
 

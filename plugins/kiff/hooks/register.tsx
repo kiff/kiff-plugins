@@ -286,6 +286,7 @@ async function checkHolds($: Engine, asked = false) {
       listed.has(id) ? !listed.get(id)!.unread : ended && current.wanted.has(id) && !current.seen.has(id)
     const now = await $.clock.now()
     const told: KiffCall[] = []
+    const roomNotices: KiffCall[] = []
     await update($, calls, list =>
       list.map(c => {
         if (c.state !== 'held' || !c.exceptionId || c.announced) return c
@@ -293,14 +294,22 @@ async function checkHolds($: Engine, asked = false) {
         // read (review on #12): an approval given in time stands.
         const p = listed.get(c.exceptionId)
         if (p?.answer) {
-          const done = { ...c, answer: p.answer, collectId: c.hasOperationId ? undefined : p.collectId, announced: true }
+          const done = { ...c, answer: p.answer, roomStatus: undefined, collectId: c.hasOperationId ? undefined : p.collectId, announced: true }
           told.push(done)
           return done
         }
         // Past its bound with no answer: that was its last read.
-        return checkEnded(c, now) && lastRead(c.exceptionId) ? { ...c, finalChecked: true } : c
+        let next = p ? { ...c, roomStatus: p.roomStatus } : c
+        if (p?.roomStatus === 'approved_no_room' && !c.roomNoticed) {
+          next = { ...next, roomNoticed: true }
+          roomNotices.push(next)
+        }
+        return checkEnded(c, now) && lastRead(c.exceptionId) ? { ...next, finalChecked: true } : next
       }),
     )
+    for (const call of roomNotices) {
+      $.ui.toast(`KIFF: the owner approved ${call.tool}, but its Card has no room. Nothing was sent. Review the budget in KIFF Cloud.`, { timeoutMs: 12000 })
+    }
     for (const call of told) {
       $.ui.toast(answerToast(call), { timeoutMs: 12000 })
       const text = answerPrompt(call)
@@ -469,8 +478,8 @@ export const register: Register = on => {
               {` ${call.tool}${call.amount ? ` · ${call.amount}` : ''}`}
             </Text>
             {detail(call, now) !== '' && <Text dimColor>{`  ${detail(call, now)}`}</Text>}
-            {call.state === 'held' && !call.answer && !holdEnded(call, now) && call.reviewUrl && (
-              <Link href={call.reviewUrl} label="  Answer in KIFF Cloud" />
+            {call.state === 'held' && !call.answer && (call.roomStatus || !holdEnded(call, now)) && call.reviewUrl && (
+              <Link href={call.reviewUrl} label={call.roomStatus === 'approved_no_room' ? '  Review Card room in KIFF Cloud' : '  Answer in KIFF Cloud'} />
             )}
           </Box>
         ))}
@@ -493,7 +502,10 @@ const COLORS: Record<KiffCall['state'], 'success' | 'warning' | 'error' | 'subtl
 function label(call: KiffCall, now: number): string {
   if (call.answer === 'approved') return 'approved'
   if (call.answer === 'refused') return 'refused by the owner'
-  if (call.answer === 'expired' || holdEnded(call, now) || checkEnded(call, now)) return 'wait ended'
+  if (call.answer === 'expired') return 'wait ended'
+  if (call.roomStatus === 'approved_no_room') return 'approved, waiting for Card room'
+  if (call.roomStatus === 'unavailable') return 'Card room unavailable'
+  if (holdEnded(call, now) || checkEnded(call, now)) return 'wait ended'
   return {
     allowed: 'allowed',
     held: 'waiting for approval',
@@ -509,7 +521,10 @@ function label(call: KiffCall, now: number): string {
 function detail(call: KiffCall, now: number): string {
   if (call.answer === 'approved') return 'The agent was told to call it again; that call gets the result.'
   if (call.answer === 'refused') return 'Nothing sent.'
-  if (holdEnded(call, now) || checkEnded(call, now) || call.answer === 'expired') return "If no one answered, the call was refused. The agent's retry of the same call shows the answer."
+  if (call.answer === 'expired') return 'Nothing sent. KIFF reports that the hold ended.'
+  if (call.roomStatus === 'approved_no_room') return `Nothing sent. Approval does not raise a cumulative ceiling. Review the budget in KIFF Cloud.${checkEnded(call, now) ? ' Background checks ended; /kiff reads the current answer again.' : ' The plugin keeps checking.'}`
+  if (call.roomStatus === 'unavailable') return 'Nothing sent. KIFF could not read the current room. This is not a refusal; /kiff reads the current answer again.'
+  if (holdEnded(call, now) || checkEnded(call, now)) return "If no one answered, the call was refused. The agent's retry of the same call shows the answer."
   if (call.state === 'held') return call.holdExpiresAt ? `Nothing sent. Waits until ${call.holdExpiresAt}.` : 'Nothing sent.'
   if (call.state === 'refused') return `Nothing sent.${call.reasons ? ` ${call.reasons.join(', ')}` : ''}`
   if (call.state === 'unknown') return 'KIFF cannot tell whether the tool received it. Check the tool before trying again.'

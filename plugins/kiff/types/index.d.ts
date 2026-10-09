@@ -38,8 +38,12 @@ export type KiffCall = {
    * call. Only a key of KIFF's form is kept.
    */
   collectId?: string
-  /** The owner's answer to a held call, read through kiff_card. */
+  /** The owner's answer to a held call, read through kiff_pending. */
   answer?: KiffAnswer
+  /** Approval can exist without room to collect; neither state starts a turn. */
+  roomStatus?: 'approved_no_room' | 'unavailable'
+  /** The fixed no-room notice has been shown once for this hold. */
+  roomNoticed?: boolean
   /** True once the answer was shown and the agent was told, so only once. */
   announced?: boolean
   /**
