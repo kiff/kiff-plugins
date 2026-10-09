@@ -40,8 +40,8 @@ export type KiffCall = {
   collectId?: string
   /** The owner's answer to a held call, read through kiff_pending. */
   answer?: KiffAnswer
-  /** Approval can exist without room to collect; neither state starts a turn. */
-  roomStatus?: 'approved_no_room' | 'unavailable'
+  /** Approval can exist without room to collect; this state starts no turn. */
+  roomStatus?: 'approved_no_room'
   /** The fixed no-room notice has been shown once for this hold. */
   roomNoticed?: boolean
   /** True once the answer was shown and the agent was told, so only once. */

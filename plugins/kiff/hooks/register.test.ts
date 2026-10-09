@@ -454,7 +454,7 @@ test('approval without room stays visible, starts no turn, and is collected once
   await ui.unmount()
   status = 'unavailable'
   await clock.advance(15000)
-  expect(seen.status).toBe('Card room unavailable · refund_order')
+  expect(seen.status).toBe('waiting for approval · refund_order')
   expect(seen.prompts).toEqual([])
   status = 'approved_no_room'
   await clock.advance(15000)
@@ -468,6 +468,25 @@ test('approval without room stays visible, starts no turn, and is collected once
   expect(seen.tools).toEqual(['mcp__claude_ai_KIFF__refund_order'])
   ui = await pane($)
   expect(await ui.find({ type: 'Text', text: /^approved$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('an unavailable answer on a plain hold does not outlive its wait or mention room', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'unavailable', refuse: false, expires: '2026-10-06T14:00:30Z' })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-unread-ended'))
+  await clock.advance(15000)
+  expect(seen.status).toBe('waiting for approval · refund_order')
+  expect(seen.toasts.join(' ')).not.toMatch(/room/i)
+  await clock.advance(15000)
+  expect(seen.status ?? '').not.toMatch(/waiting|room/i)
+  await clock.advance(120000)
+  expect(seen.status ?? '').not.toMatch(/waiting|room/i)
+  expect(seen.prompts).toEqual([])
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Text', text: /^wait ended$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /room/i })).toBeUndefined()
+  expect(await ui.find({ type: 'Link', text: /Answer in KIFF Cloud|room/i })).toBeUndefined()
   await ui.unmount()
 })
 

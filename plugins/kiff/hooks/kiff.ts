@@ -281,7 +281,6 @@ export function statusLine(card: KiffCard | null, calls: readonly KiffCall[], no
     const tools = [...new Set(waiting.map(c => c.tool))].join(', ')
     const rooms = waiting.filter(c => c.roomStatus === 'approved_no_room')
     if (rooms.length === waiting.length) return rooms.length === 1 ? `approved, waiting for Card room · ${tools}` : `${rooms.length} approved, waiting for Card room · ${tools}`
-    if (waiting.some(c => c.roomStatus === 'unavailable')) return `Card room unavailable · ${tools}`
     if (rooms.length > 0) return `${rooms.length} waiting for Card room · ${waiting.length - rooms.length} waiting for approval · ${tools}`
     return waiting.length === 1 ? `waiting for approval · ${tools}` : `${waiting.length} waiting for approval · ${tools}`
   }
@@ -290,7 +289,7 @@ export function statusLine(card: KiffCard | null, calls: readonly KiffCall[], no
 
 /** Held calls the owner has not answered yet, whose wait has not ended. */
 export function waitingCalls(calls: readonly KiffCall[], now: number): KiffCall[] {
-  return calls.filter(c => c.state === 'held' && !c.answer && (c.roomStatus !== undefined || !holdEnded(c, now)))
+  return calls.filter(c => c.state === 'held' && !c.answer && (c.roomStatus === 'approved_no_room' || !holdEnded(c, now)))
 }
 
 /** How long past its expiry a hold is still asked about, for the answer to land. */
@@ -394,7 +393,7 @@ export function readPending(structured: unknown, text: string | undefined): Pend
     if (e?.state !== 'held' || typeof e.exception_id !== 'string') continue
     const op = typeof e.kiff_operation_id === 'string' && KIFF_KEY.test(e.kiff_operation_id) ? e.kiff_operation_id : undefined
     const answer = answerOf(e.answer)
-    const roomStatus = e.answer === 'approved_no_room' || e.answer === 'unavailable' ? e.answer : undefined
+    const roomStatus = e.answer === 'approved_no_room' ? e.answer : undefined
     out.set(e.exception_id, { answer, ...(roomStatus ? { roomStatus } : {}), unread: !answer && e.answer !== 'waiting' && e.answer !== 'approved_no_room', collectId: op })
   }
   return { holds: out, next }

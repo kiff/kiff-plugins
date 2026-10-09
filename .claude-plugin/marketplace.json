@@ -12,7 +12,7 @@
       "name": "kiff-cards",
       "source": "./plugins/kiff-cards",
       "description": "Beta. Give each AI agent an authority card: which actions it may take, how much, and who approves the rest. For companies whose agents act on their money and customer accounts.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "homepage": "https://kiff.dev/docs/agent-skill",
       "license": "MIT"
     },
