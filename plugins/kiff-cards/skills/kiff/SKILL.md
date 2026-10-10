@@ -153,6 +153,23 @@ Gather first: which tool calls the agent makes (kiff-guard `observe` output,
 or the connected tool list), the unit of the amount argument (cents, whole
 euros, rows), and how many such actions a person handled in a normal day.
 
+Then ask the owner two questions, because the Card's route past its limits
+comes from their answers, not from the kind of action:
+
+- **What must stop outright when it is outside these limits?** That is
+  **Stop** (`on_exceed: refuse`): the call is refused and nothing is sent to
+  the tool. Legitimate work past the limits stays undone until the owner
+  changes the Card.
+- **Who may answer exceptions?** That is **Ask** (`on_exceed: owner`, the
+  default): the call is held for an authorized approver. Work past the
+  limits waits on that person; a hold nobody answers before it expires is
+  refused, never approved by silence.
+
+Use only what you can read (the connected tools, the Card's current
+settings) and what the owner tells you. If you do not know who reviews
+exceptions or when they are available, say it is unknown; do not assume
+it. Propose Stop or Ask from the answers and let the owner confirm.
+
 Then propose, one line each, with the reason:
 
 ```text
@@ -160,17 +177,19 @@ Card for: support-agent         Tool: issue_refund (amount in whole euros)
 Most per call:      50          a typical refund is under 40
 Total per day:      500         about ten refunds on a normal day
 Calls per day:      12          leaves room for a busy day, not a runaway
-Outside the Card:   hold        the owner sees each exception
-Hold waits:         30 minutes  the owner is online in working hours
+Outside the Card:   Ask         you said a person reviews refunds above 50
+Hold waits:         30 minutes  [what the owner said about review times]
 ```
 
 Guidance:
 
 - Start narrow. Raising a Card is one click for the owner; a wide Card is
   only noticed after it is used.
-- Prefer **hold** for actions a person can judge quickly (refunds, credits).
-  Prefer **refuse** where no exception should run (deleting data, payouts
-  above any normal amount).
+- Stop and Ask are routes, not grades of trust. Both let calls inside the
+  Card run. Money going out can be either: a refund someone reviews is Ask,
+  a payout nobody should approve past the limit is Stop.
+- An approval is not the tool's result: after an approved call runs, read
+  what the tool reported.
 - Hold expiry is 10 minutes by default, from 1 minute to 7 days. An
   unanswered hold is refused, never approved by silence.
 - Several agents doing one job can **share** a Card (up to 20); they draw on
