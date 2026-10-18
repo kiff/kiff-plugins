@@ -70,10 +70,12 @@ owner or an admin. Walk them through it; do not do it for them.
    - **Connect an app with sign-in → Create a connect link.** KIFF shows a URL
      that names this agent. The app connects to it, and an admin or editor
      signs in to KIFF in the browser and allows it. No key is pasted
-     anywhere. A CLI on a server with no browser shows a code instead, and
-     the admin or editor enters it at `app.kiff.dev/oauth/device`.
-   - **Connect to the KIFF gateway.** KIFF shows a gateway key once, with the
-     setup for Claude Code and Codex. Use this for agents that run unattended.
+     anywhere. A client that supports the OAuth device flow shows a code
+     instead, and the admin or editor enters it at
+     `app.kiff.dev/oauth/device`.
+   - **Claude Code or Codex → Create the key and config.** KIFF shows a
+     gateway key once, with the setup for Claude Code and Codex. Use this for
+     agents that run unattended.
 
    Either way the agent's credential is bound to that agent and can only ask:
    it cannot connect tools, issue Cards or answer approvals. Every connection
@@ -86,7 +88,10 @@ owner or an admin. Walk them through it; do not do it for them.
    enter a code for them either. If they ask how:
 
    - **Claude Code with a connect link:** `claude mcp add --transport http
-     kiff <link URL>`, then follow the sign-in when Claude Code asks.
+     kiff <link URL>`, then `claude mcp login kiff` (or `/mcp`, select kiff,
+     then Authenticate) and the admin or editor allows it in the browser.
+     Over SSH, `claude mcp login kiff` prints a URL to open locally and asks
+     for the address the browser ends on.
    - **Claude Code with a key:** install the KIFF plugin (`/plugin marketplace add
      kiff/kiff-plugins`, then `/plugin install kiff-cards@kiff`). Claude Code asks
      for the key when the plugin is enabled and keeps it in its secure
@@ -153,6 +158,23 @@ Gather first: which tool calls the agent makes (kiff-guard `observe` output,
 or the connected tool list), the unit of the amount argument (cents, whole
 euros, rows), and how many such actions a person handled in a normal day.
 
+Then ask the owner two questions, because the Card's route past its limits
+comes from their answers, not from the kind of action:
+
+- **What must stop outright when it is outside these limits?** That is
+  **Stop** (`on_exceed: refuse`): the call is refused and nothing is sent to
+  the tool. Legitimate work past the limits stays undone until the owner
+  changes the Card.
+- **Who may answer exceptions?** That is **Ask** (`on_exceed: owner`, the
+  default): the call is held for an authorized approver. Work past the
+  limits waits on that person; a hold nobody answers before it expires is
+  refused, never approved by silence.
+
+Use only what you can read (the connected tools, the Card's current
+settings) and what the owner tells you. If you do not know who reviews
+exceptions or when they are available, say it is unknown; do not assume
+it. Propose Stop or Ask from the answers and let the owner confirm.
+
 Then propose, one line each, with the reason:
 
 ```text
@@ -160,17 +182,19 @@ Card for: support-agent         Tool: issue_refund (amount in whole euros)
 Most per call:      50          a typical refund is under 40
 Total per day:      500         about ten refunds on a normal day
 Calls per day:      12          leaves room for a busy day, not a runaway
-Outside the Card:   hold        the owner sees each exception
-Hold waits:         30 minutes  the owner is online in working hours
+Outside the Card:   Ask         you said a person reviews refunds above 50
+Hold waits:         30 minutes  [what the owner said about review times]
 ```
 
 Guidance:
 
 - Start narrow. Raising a Card is one click for the owner; a wide Card is
   only noticed after it is used.
-- Prefer **hold** for actions a person can judge quickly (refunds, credits).
-  Prefer **refuse** where no exception should run (deleting data, payouts
-  above any normal amount).
+- Stop and Ask are routes, not grades of trust. Both let calls inside the
+  Card run. Money going out can be either: a refund someone reviews is Ask,
+  a payout nobody should approve past the limit is Stop.
+- An approval is not the tool's result: after an approved call runs, read
+  what the tool reported.
 - Hold expiry is 10 minutes by default, from 1 minute to 7 days. An
   unanswered hold is refused, never approved by silence.
 - Several agents doing one job can **share** a Card (up to 20); they draw on
@@ -254,6 +278,6 @@ Key pages: [Quickstart](https://kiff.dev/docs/quickstart),
 [Held calls and approvals](https://kiff.dev/docs/approvals),
 [Connect an agent](https://kiff.dev/docs/connect-an-agent).
 
-What is built today and what is direction: KIFF says so on
-<https://kiff.dev/docs/whats-real-today>. Do not promise a feature that page
-lists as not yet built.
+What KIFF does not do: the limits are listed on
+<https://kiff.dev/docs/what-kiff-is#limits-to-know>. Do not promise a feature
+the docs do not describe.
