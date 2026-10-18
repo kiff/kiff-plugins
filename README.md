@@ -156,7 +156,9 @@ gateway, and a Claude Code version that runs plugin hooks modules. (Until
   `/kiff`; an answer it reads, however late, is always applied.
   `approved_no_room` keeps the call pending. When KIFF reports it is
   collectible, the plugin shows its usual single notice and turn; it
-  never revises a budget or retries the business tool itself.
+  never revises a budget or retries the business tool itself. A held call
+  its own run withdrew when it stopped (`withdrawn`) gets one notice and
+  starts no turn: the owner did not answer, and nothing was sent.
 - **`/kiff`:** a pane with this session's KIFF calls and what KIFF answered:
   allowed, waiting for approval, approved, refused, or outcome unknown.
 

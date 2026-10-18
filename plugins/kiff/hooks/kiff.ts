@@ -406,8 +406,10 @@ export function answerOf(answer: unknown): KiffAnswer | undefined {
       return 'approved'
     case 'refused':
       return 'refused'
-    case 'ended': // ran out, or the Card changed or was withdrawn
+    case 'ended': // ran out, or its Card was revoked
       return 'expired'
+    case 'withdrawn': // its own run withdrew it when it stopped (kiff-cloud#1260)
+      return 'withdrawn'
     default: // waiting, unavailable
       return undefined
   }
@@ -422,6 +424,7 @@ export function answerToast(call: KiffCall): string {
       : `KIFF: the owner approved ${what}. It had no kiff_operation_id, so the agent is told to ask you to check it in KIFF Cloud before calling again.`,
     refused: `KIFF: the owner refused ${what}. Nothing was sent.`,
     expired: `KIFF: the hold on ${what} ended without approval. Nothing was sent.`,
+    withdrawn: `KIFF: the held ${what} call was withdrawn when its run stopped. Nothing was sent, and the owner did not decide.`,
   }[call.answer!]
 }
 
@@ -429,9 +432,11 @@ export function answerToast(call: KiffCall): string {
  * The one turn the plugin starts so the agent picks up the answer. Only
  * the plugin's own words, the tool's name and the agent's own operation
  * id: nothing the tool or a page wrote. It tells the agent; the agent
- * decides whether to call again.
+ * decides whether to call again. A withdrawn hold starts no turn: the
+ * owner did not answer, and its run was stopped on purpose.
  */
-export function answerPrompt(call: KiffCall): string {
+export function answerPrompt(call: KiffCall): string | undefined {
+  if (call.answer === 'withdrawn') return undefined
   // KIFF's own hold id names the call; it is checked to be one.
   const hold = call.exceptionId ? `KIFF hold ${call.exceptionId}` : ''
   const which = call.operationId

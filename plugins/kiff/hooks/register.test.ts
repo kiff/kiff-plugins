@@ -471,6 +471,24 @@ test('approval without room stays visible, starts no turn, and is collected once
   await ui.unmount()
 })
 
+test('a hold its run withdrew is told once, stops waiting and being asked about, and starts no turn (kiff-cloud#1260)', async ($, on) => {
+  const { clock, seen } = holdRig(on, { status: () => 'withdrawn', refuse: false })
+  await $.session.start({ cwd: '/' } as never)
+  await $.tool.call(refund('op-withdrawn'))
+  await clock.advance(15000)
+  expect(seen.toasts.filter(t => t.includes('withdrawn when its run stopped'))).toHaveLength(1)
+  expect(seen.status ?? '').not.toMatch(/waiting/i)
+  await clock.advance(15000)
+  await clock.advance(15000)
+  expect(seen.asked).toEqual([['exc-op-withdrawn']])
+  expect(seen.prompts).toEqual([])
+  expect(seen.tools).toEqual(['mcp__claude_ai_KIFF__refund_order'])
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Text', text: /^withdrawn by its run$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Link', text: /Answer in KIFF Cloud/i })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('an unavailable answer on a plain hold does not outlive its wait or mention room', async ($, on) => {
   const { clock, seen } = holdRig(on, { status: () => 'unavailable', refuse: false, expires: '2026-10-06T14:00:30Z' })
   await $.session.start({ cwd: '/' } as never)

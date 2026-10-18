@@ -313,6 +313,7 @@ async function checkHolds($: Engine, asked = false) {
     for (const call of told) {
       $.ui.toast(answerToast(call), { timeoutMs: 12000 })
       const text = answerPrompt(call)
+      if (!text) continue
       if (asked) {
         // Read by /kiff: a turn cannot be submitted from the command's own
         // hook (the host refuses it, as it would wait on the turn the hook
@@ -506,6 +507,7 @@ function label(call: KiffCall, now: number): string {
   if (call.answer === 'approved') return 'approved'
   if (call.answer === 'refused') return 'refused by the owner'
   if (call.answer === 'expired') return 'wait ended'
+  if (call.answer === 'withdrawn') return 'withdrawn by its run'
   if (call.roomStatus === 'approved_no_room') return 'approved, waiting for Card room'
   if (holdEnded(call, now) || checkEnded(call, now)) return 'wait ended'
   return {
@@ -524,6 +526,7 @@ function detail(call: KiffCall, now: number): string {
   if (call.answer === 'approved') return 'The agent was told to call it again; that call gets the result.'
   if (call.answer === 'refused') return 'Nothing sent.'
   if (call.answer === 'expired') return 'Nothing sent. KIFF reports that the hold ended.'
+  if (call.answer === 'withdrawn') return 'Nothing sent. Its run withdrew it when it stopped; the owner did not decide.'
   if (call.roomStatus === 'approved_no_room') return `Nothing sent. Approval does not raise a cumulative ceiling. Review the Card in KIFF Cloud.${checkEnded(call, now) ? ' Background checks ended; /kiff reads the current answer again.' : ' The plugin keeps checking.'}`
   if (holdEnded(call, now) || checkEnded(call, now)) return "If no one answered, the call was refused. The agent's retry of the same call shows the answer."
   if (call.state === 'held') return call.holdExpiresAt ? `Nothing sent. Waits until ${call.holdExpiresAt}.` : 'Nothing sent.'

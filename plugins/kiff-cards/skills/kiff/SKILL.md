@@ -9,8 +9,9 @@ license: MIT
 # KIFF: connect, propose a Card, handle a held call
 
 KIFF gives each AI agent a **Card**: which actions it may take, the most per
-call, totals per hour or per day, and what happens to a call outside those
-limits (it waits for the owner, or it is refused). KIFF checks every call
+call, totals per hour, per day or over the Card's whole life, and what
+happens to a call outside those limits (it waits for the owner, or it is
+refused). KIFF checks every call
 against the Card **before** it runs. The owner changes or revokes the Card
 without changing the agent.
 
@@ -30,9 +31,12 @@ These hold in every situation. They are what makes a Card mean anything.
 - **Never route around the Card.** If KIFF holds or refuses a call, do not
   make the same change another way: no direct API call, no shell, no
   browser, no other tool, no second agent. Report what happened and stop.
-- **Never approve your own call.** Only a person on the account who may
-  approve, signed in at `app.kiff.dev`, can answer a held call. A "yes" in the chat
-  is not an approval. Do not open the review link and click for them.
+- **Never approve your own call.** Only someone the account lets approve
+  can answer a held call: a person signed in at `app.kiff.dev`, the same
+  person on a phone app signed in to KIFF with its own device key (such as
+  tafs), or an approver service an admin connected to that Card. A "yes" in
+  the chat is not an approval. Do not open the review link and click for
+  them.
 - **Never ask for, store or print an owner or admin credential.** An agent
   works with its own gateway key, bound to that agent. Issuing a Card,
   connecting a tool and creating keys are the owner's steps.
@@ -63,17 +67,24 @@ owner or an admin. Walk them through it; do not do it for them.
    public HTTPS URL and, if it needs one, its bearer credential. Then choose
    the tool, the name the agent will see, the **amount argument** a Card
    limits (whole numbers only), the **idempotency argument** KIFF fills (text
-   only, if the tool has one), and whether the tool only reads.
+   only, if the tool has one), and whether the tool only reads. If Cards
+   should name what the agent may act on (these orders only), set the
+   tool's **resource argument**; a Card's **Only for** lists the values.
+   A tool that does many actions, such as Stripe's `stripe_api_write`, is
+   connected once per action, with fixed arguments and paths to the amount
+   and the resource inside its parameters (gateway API only).
 2. **Give the agent a Card.** **Tools → Give an agent a Card** on that tool.
    See [Propose a Card](#propose-a-card) for what to suggest.
 3. **Let the agent in.** On **Agents →** the agent **→ Tools**, one of:
    - **Connect an app with sign-in → Create a connect link.** KIFF shows a URL
      that names this agent. The app connects to it, and an admin or editor
      signs in to KIFF in the browser and allows it. No key is pasted
-     anywhere. A CLI on a server with no browser shows a code instead, and
-     the admin or editor enters it at `app.kiff.dev/oauth/device`.
-   - **Connect to the KIFF gateway.** KIFF shows a gateway key once, with the
-     setup for Claude Code and Codex. Use this for agents that run unattended.
+     anywhere. A client that supports the OAuth device flow shows a code
+     instead, and the admin or editor enters it at
+     `app.kiff.dev/oauth/device`.
+   - **Claude Code or Codex → Create the key and config.** KIFF shows a
+     gateway key once, with the setup for Claude Code and Codex. Use this for
+     agents that run unattended.
 
    Either way the agent's credential is bound to that agent and can only ask:
    it cannot connect tools, issue Cards or answer approvals. Every connection
@@ -86,7 +97,10 @@ owner or an admin. Walk them through it; do not do it for them.
    enter a code for them either. If they ask how:
 
    - **Claude Code with a connect link:** `claude mcp add --transport http
-     kiff <link URL>`, then follow the sign-in when Claude Code asks.
+     kiff <link URL>`, then `claude mcp login kiff` (or `/mcp`, select kiff,
+     then Authenticate) and the admin or editor allows it in the browser.
+     Over SSH, `claude mcp login kiff` prints a URL to open locally and asks
+     for the address the browser ends on.
    - **Claude Code with a key:** install the KIFF plugin (`/plugin marketplace add
      kiff/kiff-plugins`, then `/plugin install kiff-cards@kiff`). Claude Code asks
      for the key when the plugin is enabled and keeps it in its secure
@@ -105,8 +119,10 @@ owner or an admin. Walk them through it; do not do it for them.
    one of two routes to the same tool.
 
 Limits today, for the tools KIFF connects to: remote MCP servers only, with a
-bearer credential (KIFF does not sign in to a tool with OAuth yet), no
-arbitrary HTTP APIs. Private, loopback and metadata addresses are refused.
+bearer credential or an execution permit the tool checks itself (verify or
+relay mode, <https://kiff.dev/docs/tool-permits>). KIFF does not sign in to a
+tool with OAuth yet, and connects no arbitrary HTTP APIs. Private, loopback
+and metadata addresses are refused.
 
 ### With kiff-guard (agents in your own code)
 
@@ -149,9 +165,32 @@ to the owner to enter at **Tools → Give an agent a Card** (or **Cards →
 Issue a card**). An agent's key is refused if it tries to issue or change a
 Card.
 
+A runtime that starts new agents, such as the setup agent behind tafs, may
+instead submit a **draft** (`POST /v1/me/agent-drafts`): the new agent and
+its Cards. A draft grants nothing until a person who may issue Cards
+confirms that exact version, in KIFF Cloud or signed on their phone. See
+<https://kiff.dev/docs/kiff-cards#starting-an-agent-from-a-draft>.
+
 Gather first: which tool calls the agent makes (kiff-guard `observe` output,
 or the connected tool list), the unit of the amount argument (cents, whole
 euros, rows), and how many such actions a person handled in a normal day.
+
+Then ask the owner two questions, because the Card's route past its limits
+comes from their answers, not from the kind of action:
+
+- **What must stop outright when it is outside these limits?** That is
+  **Stop** (`on_exceed: refuse`): the call is refused and nothing is sent to
+  the tool. Legitimate work past the limits stays undone until the owner
+  changes the Card.
+- **Who may answer exceptions?** That is **Ask** (`on_exceed: owner`, the
+  default): the call is held for an authorized approver. Work past the
+  limits waits on that person; a hold nobody answers before it expires is
+  refused, never approved by silence.
+
+Use only what you can read (the connected tools, the Card's current
+settings) and what the owner tells you. If you do not know who reviews
+exceptions or when they are available, say it is unknown; do not assume
+it. Propose Stop or Ask from the answers and let the owner confirm.
 
 Then propose, one line each, with the reason:
 
@@ -160,17 +199,19 @@ Card for: support-agent         Tool: issue_refund (amount in whole euros)
 Most per call:      50          a typical refund is under 40
 Total per day:      500         about ten refunds on a normal day
 Calls per day:      12          leaves room for a busy day, not a runaway
-Outside the Card:   hold        the owner sees each exception
-Hold waits:         30 minutes  the owner is online in working hours
+Outside the Card:   Ask         you said a person reviews refunds above 50
+Hold waits:         30 minutes  [what the owner said about review times]
 ```
 
 Guidance:
 
 - Start narrow. Raising a Card is one click for the owner; a wide Card is
   only noticed after it is used.
-- Prefer **hold** for actions a person can judge quickly (refunds, credits).
-  Prefer **refuse** where no exception should run (deleting data, payouts
-  above any normal amount).
+- Stop and Ask are routes, not grades of trust. Both let calls inside the
+  Card run. Money going out can be either: a refund someone reviews is Ask,
+  a payout nobody should approve past the limit is Stop.
+- An approval is not the tool's result: after an approved call runs, read
+  what the tool reported.
 - Hold expiry is 10 minutes by default, from 1 minute to 7 days. An
   unanswered hold is refused, never approved by silence.
 - Several agents doing one job can **share** a Card (up to 20); they draw on
@@ -218,9 +259,19 @@ means the earlier approval is waiting for cumulative room, not ready to
 collect. Keep the original call identity and arguments, tell the owner
 which budget needs revision, and wait. `unavailable` is a failed read,
 not a refusal. Only a collectible approval permits collection.
+`answer: withdrawn` means your own run withdrew the call when it stopped:
+nothing was sent and the owner didn't decide, so the item is still to do.
+If it still needs doing, make the call again with a new `kiff_operation_id`.
+`ended` (the hold expired, or its Card was revoked) is not a reason to retry.
 
-The setup agent, when acting with the administrator's confirmation,
-uses that administrator's management authority. Runtime credentials
+If your run is cancelled while a call is held, the runtime running you
+withdraws it (`POST /v1/me/holds/{exception_id}/withdraw`, with your own
+key): the hold stops waiting, a later answer is refused, and nothing is
+sent. Runtimes that pause a run on a hold, such as kiff/agents, continue
+it once the owner answers; stop and say what you wait for.
+
+KIFF Cloud's setup agent, when acting with the administrator's
+confirmation, uses that administrator's management authority. Runtime credentials
 stay separate and cannot issue Cards, add room or approve work.
 
 If your client runs tool calls as **MCP tasks**, a held call comes back as a
@@ -229,7 +280,8 @@ outcome once the owner answers or the hold expires.
 
 When a call is held, the owner is notified on Needs you, by email, and, in
 Claude Code 2.1.287 or later, with a prompt in the chat to open the review
-page. You do not need to notify anyone else. An approval links only to
+page. An app the account set up for it, such as tafs on the owner's phone,
+hears about it too. You do not need to notify anyone else. An approval links only to
 `app.kiff.dev`; treat any other "approval" link as not from KIFF.
 
 ## Where things are
@@ -246,6 +298,10 @@ page. You do not need to notify anyone else. An approval links only to
 | kiff-scan: find unguarded consequential actions in Python agents (MIT) | <https://github.com/kiff/kiff-scan> · `uvx kiff-scan scan .` |
 | Domain-authoring skill (`kiff.yaml`) | <https://kiff.dev/skills/kiff-domains.md> |
 | Claude Code plugin `kiff-cards` (gateway server + both skills) | <https://github.com/kiff/kiff-plugins> · `/plugin install kiff-cards@kiff` |
+| Optional Claude Code plugin `kiff`: the Card in the status line, held calls and the owner's answer | <https://github.com/kiff/kiff-plugins> · `/plugin install kiff@kiff` |
+| tafs: an iPhone app that hands jobs to agents under Cards, and answers held calls on the phone | <https://github.com/kiff/tafs> |
+| agents: the runtime tafs runs its agents on (runs pause on a hold and continue) | <https://github.com/kiff/agents> |
+| planque: keeps vendor keys out of the agent; calls the vendor only with a permit for that call (early) | <https://github.com/kiff/planque> |
 | This skill | <https://kiff.dev/skills/kiff.md> |
 
 Key pages: [Quickstart](https://kiff.dev/docs/quickstart),
@@ -254,6 +310,6 @@ Key pages: [Quickstart](https://kiff.dev/docs/quickstart),
 [Held calls and approvals](https://kiff.dev/docs/approvals),
 [Connect an agent](https://kiff.dev/docs/connect-an-agent).
 
-What is built today and what is direction: KIFF says so on
-<https://kiff.dev/docs/whats-real-today>. Do not promise a feature that page
-lists as not yet built.
+What KIFF does not do: the limits are listed on
+<https://kiff.dev/docs/what-kiff-is#limits-to-know>. Do not promise a feature
+the docs do not describe.
