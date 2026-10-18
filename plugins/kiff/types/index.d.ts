@@ -12,8 +12,11 @@ export type KiffCallState =
   | 'tool_error' // forwarded; the tool itself reported an error
   | 'failed'
 
-/** How a hold ended, before the agent's retry collects it. */
-export type KiffAnswer = 'approved' | 'refused' | 'expired'
+/**
+ * How a hold ended, before the agent's retry collects it. 'withdrawn': the
+ * agent's own run withdrew it when it stopped; the owner did not decide.
+ */
+export type KiffAnswer = 'approved' | 'refused' | 'expired' | 'withdrawn'
 
 export type KiffCall = {
   /** The call's kiff_operation_id, or the tool_use id when it had none. */

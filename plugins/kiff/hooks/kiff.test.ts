@@ -3,6 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   answerOf,
   answerPrompt,
+  answerToast,
   checkEnded,
   MAX_HOLD_MS,
   describeCall,
@@ -293,12 +294,13 @@ describe('held calls and their answers (#1069)', () => {
     expect(answerOf('approved')).toBe('approved')
     expect(answerOf('refused')).toBe('refused')
     expect(answerOf('ended')).toBe('expired')
+    expect(answerOf('withdrawn')).toBe('withdrawn')
     expect(answerOf('something new')).toBeUndefined()
   })
   test('kiff_pending: a hold whose answer KIFF could not read is marked unread; waiting is read', () => {
-    const calls = ['waiting', 'unavailable', 'approved', 'something-new'].map((answer, i) => ({ state: 'held', exception_id: `exc-${i}`, answer }))
+    const calls = ['waiting', 'unavailable', 'approved', 'something-new', 'withdrawn'].map((answer, i) => ({ state: 'held', exception_id: `exc-${i}`, answer }))
     const { holds } = readPending({ calls }, undefined)
-    expect([0, 1, 2, 3].map(i => holds.get(`exc-${i}`)!.unread)).toEqual([false, true, false, true])
+    expect([0, 1, 2, 3, 4].map(i => holds.get(`exc-${i}`)!.unread)).toEqual([false, true, false, true, false])
     expect(holds.get('exc-1')!.roomStatus).toBeUndefined()
   })
 
@@ -338,6 +340,11 @@ describe('held calls and their answers (#1069)', () => {
     expect(answerPrompt(call)).toMatch(/may count as a new call/)
     expect(answerPrompt({ ...call, hasOperationId: true })).toMatch(/the same kiff_operation_id you used for it/)
     expect(answerPrompt({ ...call, hasOperationId: true, operationId: 'op-1' })).toMatch(/kiff_operation_id op-1, KIFF hold exc-1/)
+  })
+  test('a withdrawn hold starts no turn: the owner did not answer (kiff-cloud#1260)', () => {
+    const call = { key: 'k', tool: 'refund', state: 'held' as const, at: 1, answer: 'withdrawn' as const, exceptionId: 'exc-1', operationId: 'op-1', hasOperationId: true }
+    expect(answerPrompt(call)).toBeUndefined()
+    expect(answerToast(call)).toBe('KIFF: the held refund call was withdrawn when its run stopped. Nothing was sent, and the owner did not decide.')
   })
 })
 
