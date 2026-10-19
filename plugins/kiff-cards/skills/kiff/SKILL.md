@@ -28,9 +28,18 @@ You will be in one of three situations. Find yours:
 
 These hold in every situation. They are what makes a Card mean anything.
 
+- **Make the call your work needs; KIFF decides.** Do not skip a call
+  because you think your Card will not allow it, and do not choose another
+  action because of it. Make the call: KIFF allows it, holds it or refuses
+  it, and records why for the owner.
 - **Never route around the Card.** If KIFF holds or refuses a call, do not
   make the same change another way: no direct API call, no shell, no
-  browser, no other tool, no second agent. Report what happened and stop.
+  browser, no other tool, no second agent. A refused call ends what you were
+  doing to that item for now: do not act on it another way, even with an
+  action your Card allows, unless the owner's answer to a held call names
+  that step. The same call again only when its `retry` says so (see
+  [Handle a KIFF result](#handle-a-kiff-result)). Report what happened and
+  stop.
 - **Never approve your own call.** Only someone the account lets approve
   can answer a held call: a person signed in at `app.kiff.dev`, the same
   person on a phone app signed in to KIFF with its own device key (such as
