@@ -3,7 +3,8 @@
 //
 // The gateway reports each call it ends itself at _meta["dev.kiff/call"]
 // and says the same in the result text. A call it forwarded comes back as
-// the tool's own result, with no KIFF metadata. Wording mirrors
+// the tool's own result, with KIFF's state "forwarded" in that _meta
+// (kiff/tafs#167), or with no KIFF metadata from a gateway before it. Wording mirrors
 // apps/gateway/internal/gateway/{result,gateway}.go in KIFF Cloud.
 
 import type { KiffAnswer, KiffCall, KiffCallState, KiffCard } from '../types'
@@ -98,6 +99,11 @@ export function readAnswer(
 ): Pick<KiffCall, 'state' | 'reasons' | 'reviewUrl' | 'holdExpiresAt' | 'exceptionId'> {
   if (isError !== true) return { state: 'allowed' }
   const meta = gatewayMeta(result)
+  // Forwarded and an error: the tool's own error, unless it is KIFF's note
+  // that it no longer keeps the tool's result.
+  if (meta?.state === 'forwarded' && !(text ?? '').replace(/^Error: /, '').startsWith('This call was sent to the tool at')) {
+    return { state: 'tool_error' }
+  }
   if (meta?.state && STATES[meta.state]) {
     const reviewUrl = reviewLink(meta.review_url)
     return {

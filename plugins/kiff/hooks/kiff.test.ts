@@ -81,6 +81,14 @@ describe('readAnswer', () => {
     expect(readAnswer({ content: [] }, 'Refund re_123 created.', false)).toEqual({ state: 'allowed' })
     expect(readAnswer({ content: [] }, 'Stripe: card declined', true)).toEqual({ state: 'tool_error' })
   })
+  test("a forwarded call keeps reading as the tool's own when KIFF names it (kiff/tafs#167)", () => {
+    const forwarded = { _meta: { 'dev.kiff/call': { state: 'forwarded', invocation: 'tc-1', sent: 'yes', retry: 'none' } } }
+    expect(readAnswer(forwarded, 'Refund re_123 created.', false)).toEqual({ state: 'allowed' })
+    expect(readAnswer(forwarded, 'Stripe: card declined', true)).toEqual({ state: 'tool_error' })
+    expect(readAnswer(forwarded, 'Error: Stripe: card declined', true)).toEqual({ state: 'tool_error' })
+    const gone = 'This call was sent to the tool at 2026-10-21T09:00:00Z. KIFF no longer keeps the tool\'s result, so check the tool for it.'
+    expect(readAnswer(forwarded, gone, true).state).toBe('allowed')
+  })
   test('maps the in-between states', () => {
     expect(readAnswer(undefined, 'This call is still being decided. Nothing has been sent yet;', true).state).toBe('deciding')
     expect(readAnswer({ _meta: { 'dev.kiff/call': { state: 'unknown' } } }, '', true).state).toBe('unknown')
