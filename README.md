@@ -142,8 +142,9 @@ gateway, and a Claude Code version that runs plugin hooks modules. (Until
   An approval without budget room reads `approved, waiting for room`;
   an unavailable room read is shown separately. Neither starts a
   collection turn.
-- **A notice when KIFF holds a call:** what was held, that nothing was sent,
-  and the link where a person answers it in KIFF Cloud.
+- **A notice when KIFF holds a call:** what was held, which limit it went over
+  when the gateway says so, that nothing was sent, and the link where a person
+  answers it in KIFF Cloud.
 - **When the owner answers:** while a call is held, the plugin reads the
   gateway's read-only `kiff_pending` every 15 seconds: the agent's held
   calls, with the owner's answer once given. Once the owner approves or
