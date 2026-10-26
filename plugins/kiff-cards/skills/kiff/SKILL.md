@@ -240,7 +240,7 @@ Guidance:
 
 Every result KIFF writes itself has text with the next step, and the same
 facts in `_meta["dev.kiff/call"]`: `state`, `sent`, `retry`,
-`retry_after_s`, `operation_id`, `review_url`, `hold_expires_at`, `reasons`.
+`retry_after_s`, `operation_id`, `review_url`, `hold_expires_at`, `why`, `reasons`.
 Read them; do not guess.
 
 **Give every new action its own `kiff_operation_id`** (the gateway adds this
@@ -250,8 +250,8 @@ an identical call within 10 minutes is treated as a retry of the first.
 
 | `state` | What it means | What you do |
 |---|---|---|
-| tool's own result | Inside the Card; KIFF forwarded it | Continue |
-| `held` | Waiting for the owner. Nothing was sent. | Tell the person the call is waiting and give them `review_url`. Retry the **identical call, same `kiff_operation_id`**, no sooner than `retry_after_s`, until it resolves or `hold_expires_at` passes. |
+| `forwarded`, the tool's own result | Inside the Card; KIFF sent it once | Continue. If the tool reported an error, report it; KIFF did not send it again. |
+| `held` | Waiting for the owner. Nothing was sent. | Tell the person the call is waiting, which limit it went over (`why`), and give them `review_url`. Retry the **identical call, same `kiff_operation_id`**, no sooner than `retry_after_s`, until it resolves or `hold_expires_at` passes. |
 | `deciding` / `forwarding` | KIFF is still working on it | Retry the identical call after `retry_after_s` |
 | `forwarded` (with `repeat: true`) | An earlier call was sent; this is its recorded result | Read whether the tool reported success or error. Do not describe an error as done, and do not send the action again. |
 | `refused` | Nothing was sent | Do what the text and `retry` say. `none`: stop and report. `new_call`: a new attempt with a **new** `kiff_operation_id`, only after the step the text names (the owner changes the Card, the period has room, or a short wait because KIFF was briefly unavailable). Never make the change another way. |
