@@ -33,6 +33,19 @@ type GatewayCall = {
   review_url?: string
   hold_expires_at?: string
   exception_id?: string
+  why?: string
+}
+
+/**
+ * The limit a held call went over, in KIFF's words for the owner ("40.00 USD
+ * would go over the 250.00 USD limit: 220.00 USD is used"). One line, at most
+ * 240 characters, and shown only as text.
+ */
+function whyOf(why: unknown): string | undefined {
+  if (typeof why !== 'string') return undefined
+  const line = why.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '')
+  if (!line) return undefined
+  return line.length > 240 ? `${line.slice(0, 239)}…` : line
 }
 
 /** Where a person answers a hold. A link anywhere else is not shown. */
@@ -96,7 +109,7 @@ export function readAnswer(
   result: unknown,
   text: string | undefined,
   isError: boolean | undefined,
-): Pick<KiffCall, 'state' | 'reasons' | 'reviewUrl' | 'holdExpiresAt' | 'exceptionId'> {
+): Pick<KiffCall, 'state' | 'reasons' | 'reviewUrl' | 'holdExpiresAt' | 'exceptionId' | 'why'> {
   if (isError !== true) return { state: 'allowed' }
   const meta = gatewayMeta(result)
   // Forwarded and an error: the tool's own error, unless it is KIFF's note
@@ -112,6 +125,7 @@ export function readAnswer(
       reviewUrl,
       holdExpiresAt: meta.hold_expires_at || undefined,
       exceptionId: exceptionIdOf(meta.exception_id) ?? exceptionFromLink(reviewUrl),
+      why: STATES[meta.state] === 'held' ? whyOf(meta.why) : undefined,
     }
   }
   // Claude Code may lead an error result's text with "Error: ".
@@ -477,5 +491,6 @@ export function holdEnded(call: KiffCall, now: number): boolean {
 export function heldToast(call: KiffCall): string {
   const what = call.amount ? `${call.tool} (${call.amount})` : call.tool
   const where = call.reviewUrl ? ` Answer in KIFF Cloud: ${call.reviewUrl}` : ' Answer in KIFF Cloud.'
-  return `KIFF is holding ${what} for approval. Nothing was sent.${where}`
+  const why = call.why ? `: ${call.why}` : ''
+  return `KIFF is holding ${what} for approval${why}. Nothing was sent.${where}`
 }

@@ -26,6 +26,8 @@ export type KiffCall = {
   amount?: string
   state: KiffCallState
   reasons?: string[]
+  /** For a held call: the limit it went over, in KIFF's words, as the gateway reports it. */
+  why?: string
   reviewUrl?: string
   /** RFC 3339: when a held call stops waiting for an answer. */
   holdExpiresAt?: string

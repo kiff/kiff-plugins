@@ -529,7 +529,10 @@ function detail(call: KiffCall, now: number): string {
   if (call.answer === 'withdrawn') return 'Nothing sent. Its run withdrew it when it stopped; the owner did not decide.'
   if (call.roomStatus === 'approved_no_room') return `Nothing sent. Approval does not raise a cumulative ceiling. Review the Card in KIFF Cloud.${checkEnded(call, now) ? ' Background checks ended; /kiff reads the current answer again.' : ' The plugin keeps checking.'}`
   if (holdEnded(call, now) || checkEnded(call, now)) return "If no one answered, the call was refused. The agent's retry of the same call shows the answer."
-  if (call.state === 'held') return call.holdExpiresAt ? `Nothing sent. Waits until ${call.holdExpiresAt}.` : 'Nothing sent.'
+  if (call.state === 'held') {
+    const why = call.why ? `${call.why}. ` : ''
+    return call.holdExpiresAt ? `${why}Nothing sent. Waits until ${call.holdExpiresAt}.` : `${why}Nothing sent.`
+  }
   if (call.state === 'refused') return `Nothing sent.${call.reasons ? ` ${call.reasons.join(', ')}` : ''}`
   if (call.state === 'unknown') return 'KIFF cannot tell whether the tool received it. Check the tool before trying again.'
   return ''
