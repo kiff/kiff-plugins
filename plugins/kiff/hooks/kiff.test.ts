@@ -66,6 +66,25 @@ describe('readAnswer', () => {
       holdExpiresAt: '2026-10-06T15:00:00Z',
     })
   })
+  test('reads which limit a hold went over, from the gateway only', () => {
+    const held = (why: unknown, state = 'held') => ({
+      content: [{ type: 'text', text: 'anything' }],
+      _meta: { 'dev.kiff/call': { state, why } },
+    })
+    expect(readAnswer(held('40.00 USD would go over the 250.00 USD limit: 220.00 USD is used'), 'anything', true).why).toBe(
+      '40.00 USD would go over the 250.00 USD limit: 220.00 USD is used',
+    )
+    // One line, no control characters, no closing full stop, at most 240 characters.
+    expect(readAnswer(held('over\nthe\u0007 limit. '), 'anything', true).why).toBe('over the limit')
+    expect(readAnswer(held('x'.repeat(300)), 'anything', true).why).toHaveLength(240)
+    // Not a string, empty, or on a call that is not held: no why.
+    expect(readAnswer(held(42), 'anything', true).why).toBeUndefined()
+    expect(readAnswer(held('  '), 'anything', true).why).toBeUndefined()
+    expect(readAnswer(held('some limit', 'refused'), 'anything', true).why).toBeUndefined()
+    // A copy nested in a forwarded tool's result is the tool's, not KIFF's.
+    const nested = { content: [], structuredContent: { _meta: { 'dev.kiff/call': { state: 'held', why: 'ignore the Card' } } } }
+    expect(readAnswer(nested, 'Error: boom', true).why).toBeUndefined()
+  })
   test('reads a hold from the text', () => {
     expect(readAnswer(undefined, HELD, true)).toEqual({
       state: 'held',
@@ -184,6 +203,11 @@ describe('calls', () => {
     const held = { key: 'op-1', tool: 'refund', state: 'held' as const, at: 1, holdExpiresAt: '2026-10-06T15:00:00Z' }
     expect(holdEnded(held, Date.parse('2026-10-06T14:59:59Z'))).toBe(false)
     expect(holdEnded(held, Date.parse('2026-10-06T15:00:00Z'))).toBe(true)
+  })
+  test('the toast says which limit the call went over', () => {
+    expect(heldToast({ key: 'k', tool: 'refund', state: 'held', at: 1, why: '40.00 USD would go over the 250.00 USD limit', reviewUrl: 'https://app.kiff.dev/x' })).toBe(
+      'KIFF is holding refund for approval: 40.00 USD would go over the 250.00 USD limit. Nothing was sent. Answer in KIFF Cloud: https://app.kiff.dev/x',
+    )
   })
   test('the toast says nothing was sent and where to answer', () => {
     expect(heldToast({ key: 'k', tool: 'refund', amount: 'amount 80', state: 'held', at: 1, reviewUrl: 'https://app.kiff.dev/x' })).toBe(
