@@ -210,10 +210,13 @@ type CardLimit = {
 }
 type AgentCard = { agent_id?: string; cards?: { id?: string; limits?: CardLimit[]; grants?: unknown[] }[] }
 
+// The gateway's words for each window (card.go's windowText).
 const WINDOWS: Record<string, string> = {
   calendar_day: 'today',
   rolling_1h: 'in the last hour',
   rolling_24h: 'in the last 24 hours',
+  rolling_7d: 'in the last 7 days',
+  lifetime: "for the Card's whole life",
 }
 
 /**
@@ -271,7 +274,7 @@ export function summarizeCardText(text: string | undefined): KiffCard | undefine
   if (text.includes('No Card of yours applies here')) return { summary: 'no Card issued', issued: false }
   let best: { remaining: number; limit: number; line: string } | undefined
   // Totals may be decimals once the Card has a unit: "38.00 of 50.00 EUR left today".
-  for (const m of text.matchAll(/(\d+(?:\.\d+)?) of (\d+(?:\.\d+)?) (\S+) left (today|in the last hour|in the last 24 hours|in this window)/g)) {
+  for (const m of text.matchAll(/(\d+(?:\.\d+)?) of (\d+(?:\.\d+)?) (\S+) left (today|in the last hour|in the last 24 hours|in the last 7 days|for the Card's whole life|in this window)/g)) {
     const remaining = Number(m[1]), limit = Number(m[2])
     if (limit > 0 && (!best || remaining / limit < best.remaining / best.limit)) best = { remaining, limit, line: m[0] }
   }

@@ -248,6 +248,19 @@ describe('the Card', () => {
   test('says when no Card applies', () => {
     expect(summarizeCard({ agent_id: 'a', cards: [] })).toEqual({ summary: 'no Card issued', issued: false })
   })
+  test("reads a 7-day and a lifetime total in the gateway's words, and skips a total for each item", () => {
+    const week = { cards: [{ limits: [
+      { quantity: 'count', limit: 1, window: 'rolling_7d', per: 'invoice_id', status: 'per_item' },
+      { quantity: 'count', limit: 10, window: 'rolling_7d', used: 4, remaining: 6, status: 'ok' },
+    ] }] }
+    expect(summarizeCard(week)).toEqual({ summary: '6 of 10 calls left in the last 7 days', issued: true })
+    const life = { cards: [{ limits: [{ quantity: 'count', limit: 3, window: 'lifetime', used: 1, remaining: 2, status: 'ok' }] }] }
+    expect(summarizeCard(life)).toEqual({ summary: "2 of 3 calls left for the Card's whole life", issued: true })
+    const text =
+      'You act as agent agent_1.\n- remind: Card card_1 covers this tool: at most 1 call in the last 7 days for each invoice_id a call names ' +
+      "(a call that names no invoice_id is held); 6 of 10 calls left in the last 7 days; 1 of 3 calls left for the Card's whole life (it never resets)."
+    expect(summarizeCardText(text)).toEqual({ summary: "1 of 3 calls left for the Card's whole life", issued: true })
+  })
   test('skips totals whose use could not be read', () => {
     const unread = { cards: [{ limits: [{ quantity: 'sum(amount)', limit: 500, window: 'calendar_day', status: 'unavailable' }] }] }
     expect(summarizeCard(unread)).toEqual({ summary: 'Card active', issued: true })
